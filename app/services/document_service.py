@@ -65,7 +65,7 @@ def create_document(cursor, connection, payload, user: dict):
 def list_documents(cursor, user: dict, page: int, limit: int, unit_id=None, status=None,sort_by=None,sort_order=None, type_=None):
     """
     Requirement:
-    - Pagination: ?page=1&limit=10 (max limit 100)
+    - Pagination: ?page=1&limit=10 
     - Filtering: type, status, unit_id
     - Must return only documents from user's company
     """
@@ -183,7 +183,7 @@ def update_document(cursor, connection, payload: dict, user: dict, document_id: 
 
         values.append(document_id)
 
-        cursor.execute(             #{', '.join(fields) => title=%s, description=%s
+        cursor.execute(                                                                         #{', '.join(fields) => title=%s, description=%s
             f"UPDATE document SET {', '.join(fields)} WHERE id=%s",                             #####################
             values,             #list[values] => ["New Title", "new.pdf", "doc_id_123"] 
                                 #tuple(values) => ("New Title", "new.pdf", "doc_id_123") both works
