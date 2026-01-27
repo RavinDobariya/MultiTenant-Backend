@@ -1,0 +1,43 @@
+from fastapi import APIRouter, Depends, HTTPException
+from app.database.cursor_config import get_db
+from app.services.unit_service import create_unit, get_units, archive_unit, unarchive_unit, update_unit
+from app.middleware.auth_me import auth_role
+from app.utils.response_handler import api_response
+from app.schemas.unit_schema import UnitCreateRequest
+from app.utils.logger import logger
+
+router = APIRouter(tags=["Units"]) 
+
+@router.post("/units")
+def create_unit_route(payload: UnitCreateRequest, user=Depends(auth_role(["ADMIN","EDITOR"])), db=Depends(get_db)):
+        cursor, connection = db
+        logger.info(f"Attempting to create unit for company_id: {user['company_id']}")
+        return create_unit(cursor,connection,payload.model_dump(),user)
+
+
+#get units for one company_id
+
+@router.get("/units")
+def get_units_routes(db=Depends(get_db),user=Depends(auth_role(["ADMIN","EDITOR","USER"]))):
+        logger.info("Fetching all units at /units endpoint")
+        cursor, connection = db
+        return get_units(cursor)
+        
+        
+@router.patch("/{unit_id}/archive")
+def archive_unit_route(unit_id: str, user=Depends(auth_role(["ADMIN","EDITOR"])), db=Depends(get_db)):
+    logger.info(f"Attempting to archive unit_id: {unit_id} for company_id: {user['company_id']}")
+    cursor, connection = db
+    return archive_unit(cursor,connection,unit_id,user)
+
+
+@router.patch("/{unit_id}/unarchive")
+def unarchive_unit_route(unit_id: str, user=Depends(auth_role(["ADMIN","EDITOR"])), db=Depends(get_db)):
+    logger.info(f"Attempting to unarchive unit_id: {unit_id} for company_id: {user['company_id']}")
+    cursor, connection = db
+    return unarchive_unit(cursor, connection,unit_id,user)
+
+@router.patch("/update/{unit_id}")
+def update_company_route(unit_id: str,payload: UnitCreateRequest,db=Depends(get_db),user=Depends(auth_role(["ADMIN","EDITOR"])),):
+    cursor, connection = db
+    return update_unit(cursor, connection, unit_id, payload.model_dump())
