@@ -1,6 +1,6 @@
 import uuid
 from fastapi import HTTPException, UploadFile, File
-from app.utils.logger import logger
+from app.utils.logger import logger,log_exception
 from app.utils.cloudinary_files import upload_file_to_cloudinary
 from app.utils.response_handler import api_response
 
@@ -58,7 +58,7 @@ def create_document(cursor, connection, payload, user: dict):
     except HTTPException:
         raise 
     except Exception as e:
-        logger.error(f"Create document failed: {e}")
+        log_exception(e,f"failed to Create document")
         raise HTTPException(status_code=500, detail="Failed to upload document")
 
 
@@ -141,7 +141,7 @@ def list_documents(cursor, user: dict, page: int, limit: int, unit_id=None, stat
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"List documents failed: {e}")
+        log_exception(e,f"failed to list document")
         raise HTTPException(status_code=500, detail="Failed to fetch documents")
 
 
@@ -196,7 +196,7 @@ def update_document(cursor, connection, payload: dict, user: dict, document_id: 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Update document failed: {e}")
+        log_exception(e,f"failed to Update document")
         raise HTTPException(status_code=500, detail="Failed to update document")
 
 
@@ -229,7 +229,7 @@ def approve_document(cursor, connection, user: dict, document_id: str):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Approve document failed: {e}")
+        log_exception(e,f"Approve document failed")
         raise HTTPException(status_code=500, detail="Failed to approve document")
 
 
@@ -264,7 +264,7 @@ def archive_document(cursor, connection, user: dict, document_id: str):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Archive document failed: {e}")
+        log_exception(e,f"Archive document failed")
         raise HTTPException(status_code=500, detail="Failed to archive document")
 
 
@@ -307,5 +307,5 @@ async def upload_document(document_id,file: UploadFile,cursor,connection,user):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"failed to upload an file: {e}")
+        log_exception(e,f"failed to upload an file")
         raise HTTPException(500,"Error while uploading file")

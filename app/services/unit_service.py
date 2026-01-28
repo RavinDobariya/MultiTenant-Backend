@@ -1,4 +1,4 @@
-from app.utils.logger import logger
+from app.utils.logger import logger,log_exception
 from app.utils.response_handler import api_response
 import uuid
 from fastapi import HTTPException
@@ -32,7 +32,7 @@ def create_unit(cursor, connection, payload: dict,user):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error creating unit for company_id: {user['company_id']}, error: {str(e)}")
+        log_exception(e,f"Error creating unit for company_id: {user['company_id']}")
         return HTTPException(500, "Failed to create unit")
     
 def get_units(cursor):
@@ -44,7 +44,7 @@ def get_units(cursor):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to fetch units with error: {str(e)}")
+        log_exception(e,f"Failed to fetch units with error")
         raise HTTPException(500, "Internal server error")
 
 def archive_unit(cursor,connection,unit_id,user):
@@ -60,7 +60,7 @@ def archive_unit(cursor,connection,unit_id,user):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error archiving unit_id: {unit_id} for company_id: {user['company_id']}, error: {str(e)}")
+        log_exception(e,f"Error archiving unit_id: {unit_id} for company_id: {user['company_id']}")
         raise HTTPException(500, "Internal server error")
 
 
@@ -79,7 +79,7 @@ def unarchive_unit(cursor,connection,unit_id,user):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error unarchiving unit_id: {unit_id} for company_id: {user['company_id']}, error: {str(e)}")
+        log_exception(e,f"Error unarchiving unit_id: {unit_id} for company_id: {user['company_id']}")
         raise HTTPException(500, "Internal server error")
     
 def update_unit(cursor,connection,unit_id,payload):
@@ -106,4 +106,5 @@ def update_unit(cursor,connection,unit_id,payload):
     except HTTPException:
         raise
     except Exception as e:
+        log_exception(e,f"Failed to update unit name")
         raise HTTPException(500,"Failed to update unit name")    

@@ -1,5 +1,5 @@
 import uuid
-from app.utils.logger import logger
+from app.utils.logger import logger,log_exception
 from fastapi import HTTPException
 from app.utils.response_handler import api_response
 
@@ -38,7 +38,7 @@ def create_audit_log(cursor, connection, action: str, entity_id: str, user_id: s
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Audit log failed: {e}")
+        log_exception(e,f"Audit log failed ")
         raise HTTPException(500,detail="Failed to create audit logs")
 
 
@@ -99,5 +99,5 @@ def list_audit_logs_service(
         raise
 
     except Exception as e:
-        logger.error(f"Failed to fetch audit logs: {e}")
+        log_exception(e,f"Failed to fetch audit logs")
         raise HTTPException(status_code=500, detail="Failed to fetch audit logs")

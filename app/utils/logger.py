@@ -1,4 +1,5 @@
 import logging
+import traceback
 from app.utils.config import settings
 
 
@@ -33,3 +34,13 @@ def get_logger(name: str = "authproject"):
 
 
 logger = get_logger()
+
+# traceback
+def log_exception(e: Exception, extra: str = ""):
+
+    trace = traceback.format_exc()
+
+    if extra:
+        logger.error(f"{extra} | {e}\n{trace}")
+    else:
+        logger.error(f"{e}\n{trace}")

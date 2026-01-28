@@ -1,5 +1,5 @@
 from fastapi import HTTPException
-from app.utils.logger import logger
+from app.utils.logger import logger,log_exception
 from fastapi.encoders import jsonable_encoder
 from app.utils.response_handler import api_response  
 import uuid
@@ -36,7 +36,7 @@ def create_company(cursor, connection, payload: dict):
     except HTTPException:
         raise 
     except Exception as e:
-        logger.error(f"Create company failed: {e}")
+        log_exception(e,f"Failed to create company")
         raise HTTPException(status_code=500, detail="Failed to create company")
 
 
@@ -50,7 +50,7 @@ def list_companies(cursor):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"List companies failed: {e}")
+        log_exception(e,f"failed to List companies")
         raise HTTPException(status_code=500, detail="Failed to fetch companies")
 
 def update_company(cursor, connection, company_id: str, payload: dict):
@@ -82,5 +82,5 @@ def update_company(cursor, connection, company_id: str, payload: dict):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Update company failed: {e}")
+        log_exception(e,f"Update company failed")
         raise HTTPException(status_code=500, detail="Failed to update company")  
