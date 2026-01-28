@@ -1,5 +1,6 @@
 from app.utils.logger import logger,log_exception
 from app.utils.response_handler import api_response
+from app.services.audit_service import create_audit_log
 import uuid
 from fastapi import HTTPException
 from fastapi.encoders import jsonable_encoder
@@ -27,6 +28,9 @@ def create_unit(cursor, connection, payload: dict,user):
         cursor.execute("INSERT INTO unit (id, company_id, name) VALUES (%s, %s, %s)",[unit_id, user["company_id"], payload["name"]])   
         connection.commit()
         logger.info(f"Unit created with id: {unit_id} for company_id: {user['company_id']}")
+        
+        #Audit logs
+        create_audit_log(cursor,connection,action="Unit creation",entity_id=unit_id,user_id=user["id"])
 
         return api_response(201, "Unit created successfully", data={"unit_id": unit_id})
     except HTTPException:
@@ -47,6 +51,34 @@ def get_units(cursor):
         log_exception(e,f"Failed to fetch units with error")
         raise HTTPException(500, "Internal server error")
 
+
+def get_unit_by_id(cursor,unit_id:str):
+    try:
+        # Get unit
+        cursor.execute("SELECT id, name, is_archived FROM unit WHERE id = %s",(unit_id,))
+        unit = cursor.fetchone()
+
+        if not unit:
+            raise HTTPException(status_code=404, detail="Unit not found")
+
+        # Get docs
+        cursor.execute("SELECT id, title,type FROM document WHERE unit_id = %s",(unit_id,))
+        docs = cursor.fetchall()
+
+
+        return {
+        "id": unit["id"],
+        "name": unit["name"],
+        "Documents": docs
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        log_exception(e,f"failed to fetch Unit | {unit_id}")
+        raise HTTPException(status_code=500, detail="Failed to fetch Unit: | {unit_id}")
+
+
 def archive_unit(cursor,connection,unit_id,user):
     try:
         cursor.execute("UPDATE unit SET is_archived=1 WHERE id=%s AND company_id=%s",(unit_id, user["company_id"]))
@@ -56,6 +88,10 @@ def archive_unit(cursor,connection,unit_id,user):
         if cursor.rowcount == 0:
             logger.warning("Unit not found or already archived")
             raise HTTPException(404, "Unit not found or already archived")
+        
+        #Audit logs
+        create_audit_log(cursor,connection,action="Unit archived",entity_id=unit_id,user_id=user["id"])
+        
         return api_response(200, "Unit archived")
     except HTTPException:
         raise
@@ -73,8 +109,10 @@ def unarchive_unit(cursor,connection,unit_id,user):
 
         if cursor.rowcount == 0:
             logger.warning(f"Unarchive failed, unit_id: {unit_id} not found for company_id: {user['company_id']}")  
-            raise HTTPException(404, "Unit not found")
+            raise HTTPException(404, "Unit Not Found!!")
 
+        #Audit logs
+        create_audit_log(cursor,connection,action="Unit unarchived",entity_id=unit_id,user_id=user["id"])
         return api_response(200, "Unit unarchived") 
     except HTTPException:
         raise
@@ -82,7 +120,7 @@ def unarchive_unit(cursor,connection,unit_id,user):
         log_exception(e,f"Error unarchiving unit_id: {unit_id} for company_id: {user['company_id']}")
         raise HTTPException(500, "Internal server error")
     
-def update_unit(cursor,connection,unit_id,payload):
+def update_unit(cursor,connection,unit_id,payload,user):
     try:
         cursor.execute("SELECT id,is_archived FROM unit WHERE id=%s", (unit_id,))
         existing_unit = cursor.fetchone()
@@ -100,9 +138,14 @@ def update_unit(cursor,connection,unit_id,payload):
                 raise HTTPException(status_code=409, detail="unit name already taken")
             cursor.execute("UPDATE unit SET name=%s WHERE id=%s", (payload["name"], unit_id))
         connection.commit()
-        
+
         logger.info(f"unit updated with id={unit_id}")
+        
+        #Audit logs
+        create_audit_log(cursor,connection,action="Unit name updated",entity_id=unit_id,user_id=user["id"])
+        
         return api_response(status_code=201,message="unit updated")
+    
     except HTTPException:
         raise
     except Exception as e:

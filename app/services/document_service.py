@@ -3,7 +3,8 @@ from fastapi import HTTPException, UploadFile, File
 from app.utils.logger import logger,log_exception
 from app.utils.cloudinary_files import upload_file_to_cloudinary
 from app.utils.response_handler import api_response
-
+from app.services.audit_service import create_audit_log
+from fastapi.encoders import jsonable_encoder
 ALLOWED_TYPES = {
     "application/pdf",
     "application/vnd.ms-excel",
@@ -53,6 +54,10 @@ def create_document(cursor, connection, payload, user: dict):
         connection.commit()
 
         logger.info(f"Document uploaded doc_id={doc_id} by user_id={user['id']}")
+        
+        #Audit logs
+        create_audit_log(cursor,connection,action="Document Created",entity_id=doc_id,user_id=user["id"])
+        
         return api_response(201, "Document created", doc_id)
 
     except HTTPException:
@@ -136,7 +141,7 @@ def list_documents(cursor, user: dict, page: int, limit: int, unit_id=None, stat
             "sort_order": sort_order,
             "data": rows
             }
-        return data
+        return jsonable_encoder(data)
 
     except HTTPException:
         raise
@@ -191,7 +196,10 @@ def update_document(cursor, connection, payload: dict, user: dict, document_id: 
         connection.commit()
 
         logger.info(f"Document updated doc_id={document_id} by user_id={user['id']}")
-        return api_response(201, "Document updated",(document_id,user["id"]))
+        
+        #Audit logs
+        create_audit_log(cursor,connection,action="Document Updated",entity_id=document_id,user_id=user["id"])
+        return api_response(201, "Document updated",document_id)
 
     except HTTPException:
         raise
@@ -224,6 +232,9 @@ def approve_document(cursor, connection, user: dict, document_id: str):
         connection.commit()
 
         logger.info(f"Document approved doc_id={document_id} by user_id={user['id']}")
+        
+        #Audit logs
+        create_audit_log(cursor,connection,action="Document Approved",entity_id=document_id,user_id=user["id"])
         return api_response(200, "Document approved",(document_id,user['id']))
 
     except HTTPException:
@@ -259,6 +270,10 @@ def archive_document(cursor, connection, user: dict, document_id: str):
         connection.commit()
 
         logger.info(f"Document archived doc_id={document_id} by user_id={user['id']}")
+        
+        #Audit logs
+        create_audit_log(cursor,connection,action="Document Archived",entity_id=document_id,user_id=user["id"])
+        
         return api_response(201, "Document archived",(document_id,user["id"]))
 
     except HTTPException:
@@ -302,6 +317,10 @@ async def upload_document(document_id,file: UploadFile,cursor,connection,user):
             raise HTTPException(status_code=404, detail="document not found!!")
         
         connection.commit()
+        
+        #Audit logs
+        create_audit_log(cursor,connection,action="Document Uploaded",entity_id=document_id,user_id=user["id"])
+        
         return api_response(201, "File uploaded successfully",file_url)
     
     except HTTPException:

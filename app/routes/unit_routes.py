@@ -1,9 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException
 from app.database.cursor_config import get_db
-from app.services.unit_service import create_unit, get_units, archive_unit, unarchive_unit, update_unit
+from app.services.unit_service import create_unit, get_units, archive_unit, unarchive_unit, update_unit,get_unit_by_id
 from app.middleware.auth_me import auth_role
-from app.utils.response_handler import api_response
 from app.schemas.unit_schema import UnitCreateRequest
+from fastapi.encoders import jsonable_encoder
+
 from app.utils.logger import logger
 
 router = APIRouter(tags=["Units"]) 
@@ -15,7 +16,7 @@ def create_unit_route(payload: UnitCreateRequest, user=Depends(auth_role(["ADMIN
         return create_unit(cursor,connection,payload.model_dump(),user)
 
 
-#get units for one company_id
+
 
 @router.get("/units")
 def get_units_routes(db=Depends(get_db),user=Depends(auth_role(["ADMIN","EDITOR","USER"]))):
@@ -23,7 +24,14 @@ def get_units_routes(db=Depends(get_db),user=Depends(auth_role(["ADMIN","EDITOR"
         cursor, connection = db
         return get_units(cursor)
         
-        
+
+@router.get("/{unit_id}")
+def get_unit_by_id_route(unit_id: str,db=Depends(get_db),user=Depends(auth_role(["ADMIN", "EDITOR", "VIEWER"]))):
+    cursor,connection = db
+    data = get_unit_by_id(cursor,unit_id)
+    return jsonable_encoder({"data": data})
+
+      
 @router.patch("/{unit_id}/archive")
 def archive_unit_route(unit_id: str, user=Depends(auth_role(["ADMIN","EDITOR"])), db=Depends(get_db)):
     logger.info(f"Attempting to archive unit_id: {unit_id} for company_id: {user['company_id']}")
@@ -40,4 +48,4 @@ def unarchive_unit_route(unit_id: str, user=Depends(auth_role(["ADMIN","EDITOR"]
 @router.patch("/update/{unit_id}")
 def update_company_route(unit_id: str,payload: UnitCreateRequest,db=Depends(get_db),user=Depends(auth_role(["ADMIN","EDITOR"])),):
     cursor, connection = db
-    return update_unit(cursor, connection, unit_id, payload.model_dump())
+    return update_unit(cursor, connection, unit_id, payload.model_dump(),user)

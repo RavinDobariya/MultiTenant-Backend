@@ -38,10 +38,8 @@ def create_audit_log(cursor, connection, action: str, entity_id: str, user_id: s
     except HTTPException:
         raise
     except Exception as e:
-        log_exception(e,f"Audit log failed ")
+        logger.error(f"Audit log failed: {e}")
         raise HTTPException(500,detail="Failed to create audit logs")
-
-
 
 def list_audit_logs_service(
     cursor,
@@ -99,5 +97,28 @@ def list_audit_logs_service(
         raise
 
     except Exception as e:
-        log_exception(e,f"Failed to fetch audit logs")
+        logger.error(f"Failed to fetch audit logs: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch audit logs")
+    
+def get_user_audit_log(cursor,user):
+    try:
+        # Get userid
+        user_id= user["id"]
+        
+        cursor.execute("SELECT id, action, entity_id, created_at FROM audit_log WHERE user_id = %s ORDER BY created_at DESC",(user_id,))
+        audit_log = cursor.fetchall()
+
+        if not audit_log:
+            raise HTTPException(status_code=404, detail="no audits founds")
+
+        return {
+        "id": user_id,
+        "email": user["email"],
+        "Audit_logs": audit_log
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        log_exception(e,f"failed to fetch user's audit logs | {user_id}")
+        raise HTTPException(status_code=500, detail="Failed to fetch company: | {user_id}")

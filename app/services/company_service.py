@@ -1,10 +1,11 @@
 from fastapi import HTTPException
 from app.utils.logger import logger,log_exception
+from app.services.audit_service import create_audit_log
 from fastapi.encoders import jsonable_encoder
 from app.utils.response_handler import api_response  
 import uuid
 
-def create_company(cursor, connection, payload: dict):
+def create_company(cursor, connection, payload: dict,user):
     """
     Requirement:
     - Only ADMIN can create companies
@@ -31,6 +32,10 @@ def create_company(cursor, connection, payload: dict):
         connection.commit()
 
         logger.info(f"Company created with name={payload['name']}")
+        
+        #Audit logs
+        create_audit_log(cursor,connection,action="Company Created",entity_id=company_id,user_id=user["id"])
+        
         return api_response(status_code=201,message="Company created")
 
     except HTTPException:
@@ -51,9 +56,39 @@ def list_companies(cursor):
         raise
     except Exception as e:
         log_exception(e,f"failed to List companies")
-        raise HTTPException(status_code=500, detail="Failed to fetch companies")
+        raise HTTPException(status_code=500, detail="Failed to fetch companies ")
 
-def update_company(cursor, connection, company_id: str, payload: dict):
+def get_company_by_id(cursor,company_id:str):
+    try:
+        # Get company
+        cursor.execute("SELECT id, name FROM company WHERE id = %s",(company_id,))
+        company = cursor.fetchone()
+
+        if not company:
+            raise HTTPException(status_code=404, detail="Company not found")
+
+        # Get users
+        cursor.execute("SELECT id, email FROM user WHERE company_id = %s",(company_id,))
+        users = cursor.fetchall()
+
+        # Get units
+        cursor.execute("SELECT id, name FROM unit WHERE company_id = %s",(company_id,))
+        units = cursor.fetchall()
+
+        return {
+        "id": company["id"],
+        "name": company["name"],
+        "users": users,
+        "units": units
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        log_exception(e,f"failed to get company | {company_id}")
+        raise HTTPException(status_code=500, detail="Failed to fetch company: | {company_id}")
+
+def update_company(cursor, connection, company_id: str, payload: dict,user):
     """
     Requirement:
     - Only ADMIN can update companies
@@ -77,6 +112,9 @@ def update_company(cursor, connection, company_id: str, payload: dict):
         connection.commit()
         
         logger.info(f"Company updated with id={company_id}")
+        
+        #Audit logs
+        create_audit_log(cursor,connection,action="Company name Updated",entity_id=company_id,user_id=user["id"])
         return api_response(status_code=201,message="Company updated")
     
     except HTTPException:

@@ -32,7 +32,7 @@ def create_doc(payload: DocumentCreate, db=Depends(get_db), user=Depends(auth_ro
     logger.info(f"create document request by user_id={user['id']}")
     return create_document(cursor, connection, payload.model_dump(), user)
 
-@router.get("")
+@router.get("/list")
 def get_documents(
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=10, ge=1, le=100),
@@ -46,7 +46,7 @@ def get_documents(
 ):
     cursor, connection = db
     data = list_documents(cursor, user, page, limit, unit_id, status, sort_by,sort_order,type_=type,)
-    return jsonable_encoder({"data": data})
+    return api_response(200,"all docs fetched",data)
 
 
 @router.patch("/{document_id}")
