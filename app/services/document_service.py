@@ -41,7 +41,7 @@ def create_document(cursor, connection, payload, user: dict):
                 break
 
         cursor.execute(
-            "INSERT INTO document (id, unit_id, title, description, type, status, created_by) VALUES ( %s,%s, %s, %s, %s, 'DRAFT', %s)",
+            "INSERT INTO document (id, unit_id, title, description, type, status, created_by,updated_at,updated_by) VALUES ( %s,%s, %s, %s, %s, 'DRAFT', %s,now(),%s)",
             (
                 doc_id,
                 payload["unit_id"],
@@ -49,6 +49,7 @@ def create_document(cursor, connection, payload, user: dict):
                 payload.get("description"),         # optional return None if not provided
                 payload["type"],
                 user["id"],
+                user["id"]
             ),
         )
         connection.commit()
@@ -65,7 +66,6 @@ def create_document(cursor, connection, payload, user: dict):
     except Exception as e:
         log_exception(e,f"failed to Create document")
         raise HTTPException(status_code=500, detail="Failed to upload document")
-
 
 def list_documents(cursor, user: dict, page: int, limit: int, unit_id=None, status=None,sort_by=None,sort_order=None, type_=None):
     """
@@ -186,10 +186,10 @@ def update_document(cursor, connection, payload: dict, user: dict, document_id: 
         if not fields:
             raise HTTPException(status_code=400, detail="No fields to update")
 
-        values.append(document_id)
+        values.extend([user["id"],document_id])
 
         cursor.execute(                                                                         #{', '.join(fields) => title=%s, description=%s
-            f"UPDATE document SET {', '.join(fields)} WHERE id=%s",                             #####################
+            f"UPDATE document SET {', '.join(fields)},updated_at=now(),updated_by=%s WHERE id=%s",                             #####################
             values,             #list[values] => ["New Title", "new.pdf", "doc_id_123"] 
                                 #tuple(values) => ("New Title", "new.pdf", "doc_id_123") both works
         )
@@ -220,10 +220,10 @@ def approve_document(cursor, connection, user: dict, document_id: str):
             """
             UPDATE document d
             JOIN unit u ON u.id = d.unit_id
-            SET d.status='APPROVED', d.approved_by=%s
+            SET d.status='APPROVED', d.approved_by=%s,d.updated_at=now(),d.updated_by=%s
             WHERE d.id=%s AND u.company_id=%s AND d.status='DRAFT'
             """,
-            (user["id"], document_id, user["company_id"]),
+            (user["id"],user["id"],document_id, user["company_id"]),
         )
 
         if cursor.rowcount == 0:
@@ -256,12 +256,12 @@ def archive_document(cursor, connection, user: dict, document_id: str):
             """                                     
             UPDATE document d 
             JOIN unit u ON u.id = d.unit_id 
-            SET d.status='ARCHIVED' 
+            SET d.status='ARCHIVED' ,d.updated_at=now(),d.updated_by=%s
             WHERE d.id=%s 
             AND u.company_id=%s 
             AND d.status!='ARCHIVED'
             """,
-            (document_id, user["company_id"]),
+            (user["id"],document_id, user["company_id"]),
         )
 
         if cursor.rowcount == 0:
@@ -307,12 +307,11 @@ async def upload_document(document_id,file: UploadFile,cursor,connection,user):
             """
             UPDATE document d
             JOIN unit u ON u.id = d.unit_id
-            SET d.file_url = %s
+            SET d.file_url = %s,d.updated_at=now(),d.updated_by=%s
             WHERE d.id = %s AND u.company_id = %s
             """,
-            (file_url, document_id, user["company_id"])
-        ) 
-        
+            (file_url,user["id"], document_id, user["company_id"])
+        )
         if cursor.rowcount == 0:
             raise HTTPException(status_code=404, detail="document not found!!")
         

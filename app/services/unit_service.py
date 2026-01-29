@@ -25,7 +25,7 @@ def create_unit(cursor, connection, payload: dict,user):
                 break
 
         # cursor.execute(...),[list] or (tuple) => both works
-        cursor.execute("INSERT INTO unit (id, company_id, name) VALUES (%s, %s, %s)",[unit_id, user["company_id"], payload["name"]])   
+        cursor.execute("INSERT INTO unit (id, company_id, name,created_by,updated_at,updated_by) VALUES (%s, %s, %s,%s,now(),%s)",[unit_id, user["company_id"], payload["name"],user["id"],user["id"]])
         connection.commit()
         logger.info(f"Unit created with id: {unit_id} for company_id: {user['company_id']}")
         
@@ -81,7 +81,7 @@ def get_unit_by_id(cursor,unit_id:str):
 
 def archive_unit(cursor,connection,unit_id,user):
     try:
-        cursor.execute("UPDATE unit SET is_archived=1 WHERE id=%s AND company_id=%s",(unit_id, user["company_id"]))
+        cursor.execute("UPDATE unit SET is_archived=1,updated_at=now(),updated_by=%s WHERE id=%s AND company_id=%s",(user["id"],unit_id, user["company_id"]))
         connection.commit()
         logger.info(f"Unit archived with id: {unit_id} for company_id: {user['company_id']}")
 
@@ -103,7 +103,7 @@ def archive_unit(cursor,connection,unit_id,user):
 def unarchive_unit(cursor,connection,unit_id,user):
     try:
         cursor.execute(
-            "UPDATE unit SET is_archived=0 WHERE id=%s AND company_id=%s",(unit_id, user["company_id"]))
+            "UPDATE unit SET is_archived=0,updated_at=now(),updated_by=%s WHERE id=%s AND company_id=%s",(user["id"],unit_id, user["company_id"]))
         connection.commit()
         logger.info(f"Unit unarchived with id: {unit_id} for company_id: {user['company_id']}")
 
@@ -136,7 +136,7 @@ def update_unit(cursor,connection,unit_id,payload,user):
             name_conflict = cursor.fetchone()
             if name_conflict:
                 raise HTTPException(status_code=409, detail="unit name already taken")
-            cursor.execute("UPDATE unit SET name=%s WHERE id=%s", (payload["name"], unit_id))
+            cursor.execute("UPDATE unit SET name=%s,updated_at=now(),updated_by=%s WHERE id=%s", (payload["name"],user["id"], unit_id))
         connection.commit()
 
         logger.info(f"unit updated with id={unit_id}")

@@ -3,7 +3,6 @@ from app.database.cursor_config import get_db
 from app.services.company_service import create_company, list_companies, update_company, get_company_by_id
 from app.schemas.company_schema import CompanyCreate, CompanyUpdate
 from app.middleware.auth_me import auth_role
-from app.utils.response_handler import api_response
 from app.utils.logger import logger
 from fastapi.encoders import jsonable_encoder
 

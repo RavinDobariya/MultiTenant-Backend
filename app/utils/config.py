@@ -20,7 +20,9 @@ class Settings(BaseSettings):
     CLOUDINARY_API_KEY: str
     CLOUDINARY_API_SECRET: str
     CLOUDINARY_FOLDER: str = "fastapi_docs"
-    
+
+    DATABASE_URL: str
+
     LOG_LEVEL: str = "INFO"
 
     class Config:

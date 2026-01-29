@@ -28,7 +28,7 @@ def create_company(cursor, connection, payload: dict,user):
             else:
                 break
             
-        cursor.execute("INSERT INTO company (id,name, created_at) VALUES (%s,%s, NOW())",[company_id,payload["name"]])
+        cursor.execute("INSERT INTO company (id,name, created_at, created_by,updated_at,updated_by) VALUES (%s,%s, NOW(),%s,Now(),%s)",[company_id,payload["name"],user["id"],user["id"]])
         connection.commit()
 
         logger.info(f"Company created with name={payload['name']}")
@@ -108,7 +108,7 @@ def update_company(cursor, connection, company_id: str, payload: dict,user):
             name_conflict = cursor.fetchone()
             if name_conflict:
                 raise HTTPException(status_code=409, detail="Company name already taken")
-            cursor.execute("UPDATE company SET name=%s WHERE id=%s", (payload["name"], company_id))
+            cursor.execute("UPDATE company SET name=%s,updated_at=Now(),updated_by=%s WHERE id=%s", (payload["name"],user["id"], company_id))
         connection.commit()
         
         logger.info(f"Company updated with id={company_id}")
