@@ -16,7 +16,7 @@ def get_current_user(creds: HTTPAuthorizationCredentials = Depends(bearer_scheme
     if not user_id:
         raise HTTPException(401, "Invalid token payload")
 
-    cursor.execute("SELECT id, email, role, company_id FROM `user` WHERE id=%s",[user_id])
+    cursor.execute("SELECT id, email, role, company_id FROM `user` WHERE id=%s AND is_delete=0",[user_id])
     user = cursor.fetchone()
 
     if not user:

@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from app.database.cursor_config import get_db
-from app.services.unit_service import create_unit, get_units, archive_unit, unarchive_unit, update_unit,get_unit_by_id
+from app.services.unit_service import create_unit, get_units, archive_unit, unarchive_unit, update_unit,get_unit_by_id,delete_unit
 from app.middleware.auth_me import auth_role
 from app.schemas.unit_schema import UnitCreateRequest
 from fastapi.encoders import jsonable_encoder
@@ -46,6 +46,12 @@ def unarchive_unit_route(unit_id: str, user=Depends(auth_role(["ADMIN","EDITOR"]
     return unarchive_unit(cursor, connection,unit_id,user)
 
 @router.patch("/update/{unit_id}")
-def update_company_route(unit_id: str,payload: UnitCreateRequest,db=Depends(get_db),user=Depends(auth_role(["ADMIN","EDITOR"])),):
+def update_unit_route(unit_id: str,payload: UnitCreateRequest,db=Depends(get_db),user=Depends(auth_role(["ADMIN","EDITOR"])),):
     cursor, connection = db
     return update_unit(cursor, connection, unit_id, payload.model_dump(),user)
+
+@router.delete("/delete/{unit_id}")
+def delete_unite_route(unit_id: str, user=Depends(auth_role(["ADMIN"])), db=Depends(get_db),confirm: bool = False):
+
+    cursor, connection = db
+    return delete_unit(cursor, connection, unit_id,confirm)

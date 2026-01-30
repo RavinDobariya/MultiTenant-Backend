@@ -121,4 +121,27 @@ def update_company(cursor, connection, company_id: str, payload: dict,user):
         raise
     except Exception as e:
         log_exception(e,f"Update company failed")
-        raise HTTPException(status_code=500, detail="Failed to update company")  
+        raise HTTPException(status_code=500, detail="Failed to update company")
+
+
+def delete_company(cursor,connection,company_id,user,confirm: bool ):
+    try:
+        if not confirm:
+            return api_response(
+                200,
+                "Deleting this company will remove all related data. Please confirm.",
+                {"confirm_required": True}
+            )
+        cursor.execute("DELETE FROM company WHERE id=%s ",(company_id,))
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="company not found")
+        connection.commit()
+
+        return api_response(200, "company deleted successfully", company_id)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        log_exception(e, f"Failed to delete company")
+        connection.rollback()
+        raise HTTPException(500, "Failed to delete company")

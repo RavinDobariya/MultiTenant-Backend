@@ -158,3 +158,19 @@ def auth_logout(cursor, conn,user):
     except Exception as e:
         log_exception(e,f"Error during logout | {user_id}")
         raise HTTPException(500, "Logout failed")
+
+
+def delete_user(cursor, connection,user ):
+    try:
+
+        cursor.execute("UPDATE `user` SET is_delete = 1  WHERE id=%s ",(user["id"],))
+        connection.commit()
+
+        return { "message": f"User deleted successfully {user['id']}"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        connection.rollback()
+        log_exception(e,f"Delete document failed")
+        raise HTTPException(status_code=500, detail="Failed to delete document")

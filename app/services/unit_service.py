@@ -150,4 +150,30 @@ def update_unit(cursor,connection,unit_id,payload,user):
         raise
     except Exception as e:
         log_exception(e,f"Failed to update unit name")
-        raise HTTPException(500,"Failed to update unit name")    
+        raise HTTPException(500,"Failed to update unit name")
+
+def delete_unit(cursor,connection,unit_id,confirm: bool = False):
+    try:
+        if not confirm:
+            return api_response(
+                200,
+                "Deleting this unit will remove all related data. Please confirm.",
+                {"confirm_required": True}
+            )
+        cursor.execute("SELECT count(*) as total_unit FROM unit")
+        if cursor.fetchone()["total_unit"] <= 1:
+            raise HTTPException(status_code=400, detail="Cannot delete last unit")
+
+        cursor.execute("DELETE FROM unit WHERE id=%s ",(unit_id,))
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="unit not found")
+        connection.commit()
+
+        return api_response(200, "unit deleted successfully", unit_id)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        log_exception(e, f"Failed to delete unit")
+        connection.rollback()
+        raise HTTPException(500, "Failed to delete unit")

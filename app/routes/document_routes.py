@@ -5,7 +5,7 @@ from app.database.cursor_config import get_db
 from app.middleware.auth_me import auth_role
 from app.utils.response_handler import api_response
 from app.schemas.document_schema import DocumentCreate, DocumentUpdate
-from app.services.document_service import (create_document, list_documents, update_document, approve_document, archive_document,upload_document)
+from app.services.document_service import (create_document, list_documents, update_document, approve_document, archive_document,upload_document,delete_document)
 from app.utils.logger import logger
 
 
@@ -80,4 +80,10 @@ async def upload_doc(
     file_url = await upload_document(document_id,file,cursor,connection,user)
 
 
-    return file_url 
+    return file_url
+
+@router.delete("/delete/{document_id}")
+def delete_doc(document_id: str, db=Depends(get_db), user=Depends(auth_role(["ADMIN"])),confirm:bool = False):
+
+    cursor, connection = db
+    return delete_document(cursor, connection, user, document_id,confirm)

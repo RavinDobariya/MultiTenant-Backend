@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends
 from app.database.cursor_config import get_db
-from app.services.company_service import create_company, list_companies, update_company, get_company_by_id
+from app.services.company_service import create_company, list_companies, update_company, get_company_by_id, \
+    delete_company
 from app.schemas.company_schema import CompanyCreate, CompanyUpdate
 from app.middleware.auth_me import auth_role
 from app.utils.logger import logger
@@ -32,4 +33,9 @@ def get_company_by_id_route(company_id: str,db=Depends(get_db),user=Depends(auth
 def update_company_route(company_id: str,payload: CompanyUpdate,db=Depends(get_db),user=Depends(auth_role("ADMIN")),):
     cursor, connection = db
     return update_company(cursor, connection, company_id, payload.model_dump(),user)
-  
+
+@router.delete("/delete/{company_id}")
+def delete_unite_route(company_id: str,confirm: bool = False, user=Depends(auth_role(["ADMIN"])), db=Depends(get_db)):
+
+    cursor, connection = db
+    return delete_company(cursor, connection, company_id,user,confirm)

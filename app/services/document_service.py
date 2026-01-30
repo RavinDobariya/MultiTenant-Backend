@@ -327,3 +327,26 @@ async def upload_document(document_id,file: UploadFile,cursor,connection,user):
     except Exception as e:
         log_exception(e,f"failed to upload an file")
         raise HTTPException(500,"Error while uploading file")
+
+
+def delete_document(cursor, connection, user: dict, document_id: str,confirm: bool = False):
+    try:
+        if not confirm:
+            return api_response(
+                200,
+                "Deleting this document will remove all related data. Please confirm.",
+                {"confirm_required": True}
+            )
+        cursor.execute("DELETE FROM document WHERE id=%s ",(document_id,))
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Document not found")
+        connection.commit()
+
+        return api_response(200, "Document deleted successfully", document_id)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        connection.rollback()
+        log_exception(e,f"Delete document failed")
+        raise HTTPException(status_code=500, detail="Failed to delete document")
