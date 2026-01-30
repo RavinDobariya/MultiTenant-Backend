@@ -38,4 +38,4 @@ def update_company_route(company_id: str,payload: CompanyUpdate,db=Depends(get_d
 def delete_unite_route(company_id: str,confirm: bool = False, user=Depends(auth_role(["ADMIN"])), db=Depends(get_db)):
 
     cursor, connection = db
-    return delete_company(cursor, connection, company_id,user,confirm)
+    return delete_company(cursor, connection, company_id,confirm)

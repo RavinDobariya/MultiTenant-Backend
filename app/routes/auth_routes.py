@@ -66,12 +66,12 @@ def logout(db=Depends(get_db),user=Depends(get_current_user)):
         raise HTTPException(500, "Logout failed")
 
 @router.delete("/delete")
-def delete_user_route(db=Depends(get_db),user=Depends(get_current_user)):
+def delete_user_route(db=Depends(get_db),user=Depends(get_current_user),confirm: bool = False):
     try:
         logger.info(f"User deletion attempt for user_id: {user['id']} at /delete endpoint")
         cursor, conn = db
-        data = delete_user(cursor, conn,user)
-        return api_response(200, "User account deleted successfully", data=data)
+        data = delete_user(cursor, conn,user,confirm)
+        return api_response(200, "none", data=data)
     except HTTPException:
         raise
     except Exception as e:

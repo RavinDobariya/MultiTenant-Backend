@@ -178,11 +178,10 @@ def update_document(cursor, connection, payload: dict, user: dict, document_id: 
         fields = []         #keys only
         values = []         #values only
 
-        for key in ["title", "description", "type", "file_url"]:
-            if payload.get(key) is not None:
+        for key in ["title", "description", "type"]:
+            if payload.get(key) not in [None, "string"]:
                 fields.append(f"{key}=%s")          #["title=%s", "description=%s"]
                 values.append(payload[key])         #[value1, value2]
-
         if not fields:
             raise HTTPException(status_code=400, detail="No fields to update")
 

@@ -124,7 +124,7 @@ def update_company(cursor, connection, company_id: str, payload: dict,user):
         raise HTTPException(status_code=500, detail="Failed to update company")
 
 
-def delete_company(cursor,connection,company_id,user,confirm: bool ):
+def delete_company(cursor,connection,company_id,confirm: bool ):
     try:
         if not confirm:
             return api_response(

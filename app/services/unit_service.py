@@ -1,6 +1,7 @@
 from app.utils.logger import logger,log_exception
 from app.utils.response_handler import api_response
 from app.services.audit_service import create_audit_log
+from app.services.company_service import delete_company
 import uuid
 from fastapi import HTTPException
 from fastapi.encoders import jsonable_encoder
@@ -154,19 +155,37 @@ def update_unit(cursor,connection,unit_id,payload,user):
 
 def delete_unit(cursor,connection,unit_id,confirm: bool = False):
     try:
+        cursor.execute("SELECT count(*) as total_unit FROM unit")
+        total_unit = cursor.fetchone()
+
+        # Get company_id first
+        cursor.execute("SELECT company_id FROM unit WHERE id=%s", (unit_id,))
+        row = cursor.fetchone()
+
+        if not row:
+            raise HTTPException(status_code=404, detail="Unit not found")
+
+        company_id = row["company_id"]
+
         if not confirm:
+            if total_unit["total_unit"] <= 1:
+                return api_response(
+                    200,
+                    f"Deleting this last unit will  also delete unit's company . Please confirm.",
+                    {"confirm_required": True}
+                )
             return api_response(
                 200,
                 "Deleting this unit will remove all related data. Please confirm.",
                 {"confirm_required": True}
             )
-        cursor.execute("SELECT count(*) as total_unit FROM unit")
-        if cursor.fetchone()["total_unit"] <= 1:
-            raise HTTPException(status_code=400, detail="Cannot delete last unit")
 
         cursor.execute("DELETE FROM unit WHERE id=%s ",(unit_id,))
         if cursor.rowcount == 0:
-            raise HTTPException(status_code=404, detail="unit not found")
+            raise HTTPException(status_code=404, detail="Unit not found || error during deletion")
+
+        if total_unit["total_unit"] <= 1:
+            delete_company(cursor, connection, company_id,confirm)
         connection.commit()
 
         return api_response(200, "unit deleted successfully", unit_id)

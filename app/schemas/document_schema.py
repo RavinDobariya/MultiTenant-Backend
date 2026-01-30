@@ -23,4 +23,3 @@ class DocumentUpdate(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
     type: Optional[DocumentType] = None
-    file_url: Optional[str] = None

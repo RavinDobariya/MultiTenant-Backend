@@ -160,9 +160,13 @@ def auth_logout(cursor, conn,user):
         raise HTTPException(500, "Logout failed")
 
 
-def delete_user(cursor, connection,user ):
+def delete_user(cursor, connection,user,confirm: bool ):
     try:
-
+        if not confirm:
+            return (
+                "Deleting this document will remove all related data. Please confirm.",
+                {"confirm_required": True}
+            )
         cursor.execute("UPDATE `user` SET is_delete = 1  WHERE id=%s ",(user["id"],))
         connection.commit()
 
