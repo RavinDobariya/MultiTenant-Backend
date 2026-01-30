@@ -1,5 +1,4 @@
 from app.database.db_connection import get_connection
-from app.utils.config import settings
 from app.utils.logger import logger
 
 def get_db():

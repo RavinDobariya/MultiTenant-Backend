@@ -1,5 +1,5 @@
 import uuid
-from fastapi import HTTPException, UploadFile, File
+from fastapi import HTTPException, UploadFile
 from app.utils.logger import logger,log_exception
 from app.utils.cloudinary_files import upload_file_to_cloudinary
 from app.utils.response_handler import api_response

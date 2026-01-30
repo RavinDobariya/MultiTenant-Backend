@@ -3,7 +3,6 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 from app.database.cursor_config import get_db
 from app.utils.security import decode_access_token
-from app.utils.logger import logger
 
 bearer_scheme = HTTPBearer()        # => Authorization: Bearer <token>
 
@@ -31,7 +30,7 @@ def get_current_user(creds: HTTPAuthorizationCredentials = Depends(bearer_scheme
 
     return user                 # userid, email, role, company_id
 
-def auth_role(required_roles: list[str]): 
+def auth_role(required_roles: list[str] | str):
     def role_checker(user=Depends(get_current_user)):
         role = user["role"].upper()
         if role not in required_roles:
