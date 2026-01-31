@@ -23,6 +23,18 @@ def register_exception_handlers(app):
             },
         )
 
+    """
+    API calls:
+    raise HTTPException(status_code=404, detail="Unit not found")
+    
+    It Becomes:
+    exc = HTTPException(status_code=404,detail="Unit not found")
+    
+    Access like:
+    exc.status_code = 404
+    exc.detail = "Unit not found"
+    """
+
     @app.exception_handler(RequestValidationError)
     async def validation_exception_handler(request: Request, exc: RequestValidationError):
         return JSONResponse(
