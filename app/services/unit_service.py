@@ -153,9 +153,9 @@ def update_unit(cursor,connection,unit_id,payload,user):
         log_exception(e,f"Failed to update unit name")
         raise HTTPException(500,"Failed to update unit name")
 
-def delete_unit(cursor,connection,unit_id,confirm: bool = False):
+def delete_unit(cursor,connection,unit_id,user,confirm: bool = False):
     try:
-        cursor.execute("SELECT count(*) as total_unit FROM unit")
+        cursor.execute("SELECT count(*) as total_unit FROM unit WHERE company_id=%s", (user["company_id"],))
         total_unit = cursor.fetchone()
 
         # Get company_id first
@@ -189,6 +189,9 @@ def delete_unit(cursor,connection,unit_id,confirm: bool = False):
             delete_company(cursor, connection, company_id,confirm)
         connection.commit()
 
+        # Audit logs
+        create_audit_log(cursor, connection, action="unit Deleted", entity_id=unit_id, user_id=user["id"])
+        logger.info(f"unit deleted successfully with id={unit_id}")
         return api_response(200, "unit deleted successfully", unit_id)
 
     except HTTPException:

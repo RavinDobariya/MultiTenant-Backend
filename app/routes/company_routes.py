@@ -23,19 +23,19 @@ def list_companies_route(db=Depends(get_db),user=Depends(auth_role(["ADMIN", "ED
     data = list_companies(cursor)
     return jsonable_encoder({"data": data})
 
-@router.get("/{company_id}")
-def get_company_by_id_route(company_id: str,db=Depends(get_db),user=Depends(auth_role(["ADMIN", "EDITOR", "VIEWER"]))):
+@router.get("/get-your-company")
+def get_company_by_id_route(db=Depends(get_db),user=Depends(auth_role(["ADMIN", "EDITOR", "VIEWER"]))):
     cursor,connection = db
-    data = get_company_by_id(cursor,company_id)
+    data = get_company_by_id(cursor,user)
     return jsonable_encoder({"data": data})
     
-@router.patch("/{company_id}")                                                                                  #########
-def update_company_route(company_id: str,payload: CompanyUpdate,db=Depends(get_db),user=Depends(auth_role("ADMIN")),):
+@router.patch("/update")                                                                                  #########
+def update_company_route(payload: CompanyUpdate,db=Depends(get_db),user=Depends(auth_role("ADMIN")),):
     cursor, connection = db
-    return update_company(cursor, connection, company_id, payload.model_dump(),user)
+    return update_company(cursor, connection,  payload.model_dump(),user)
 
-@router.delete("/delete/{company_id}")
-def delete_unite_route(company_id: str,confirm: bool = False, user=Depends(auth_role(["ADMIN"])), db=Depends(get_db)):
+@router.delete("/delete")
+def delete_unite_route(confirm: bool = False, user=Depends(auth_role(["ADMIN"])), db=Depends(get_db)):
 
     cursor, connection = db
-    return delete_company(cursor, connection, company_id,confirm)
+    return delete_company(cursor, connection, confirm,user)

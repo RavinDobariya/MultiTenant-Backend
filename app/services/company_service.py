@@ -58,8 +58,9 @@ def list_companies(cursor):
         log_exception(e,f"failed to List companies")
         raise HTTPException(status_code=500, detail="Failed to fetch companies ")
 
-def get_company_by_id(cursor,company_id:str):
+def get_company_by_id(cursor,user):
     try:
+        company_id=user["company_id"]
         # Get company
         cursor.execute("SELECT id, name FROM company WHERE id = %s",(company_id,))
         company = cursor.fetchone()
@@ -76,10 +77,10 @@ def get_company_by_id(cursor,company_id:str):
         units = cursor.fetchall()
 
         return {
-        "id": company["id"],
-        "name": company["name"],
-        "users": users,
-        "units": units
+        "company id": company["id"],
+        "company name": company["name"],
+        "company users": users,
+        "company units": units
         }
         
     except HTTPException:
@@ -88,13 +89,14 @@ def get_company_by_id(cursor,company_id:str):
         log_exception(e,f"failed to get company | {company_id}")
         raise HTTPException(status_code=500, detail="Failed to fetch company: | {company_id}")
 
-def update_company(cursor, connection, company_id: str, payload: dict,user):
+def update_company(cursor, connection,  payload: dict,user):
     """
     Requirement:
     - Only ADMIN can update companies
     - Company name must be unique
     """
     try:
+        company_id=user["company_id"]
         cursor.execute("SELECT id FROM company WHERE id=%s", (company_id,))
         existing_company = cursor.fetchone()
         
@@ -124,8 +126,9 @@ def update_company(cursor, connection, company_id: str, payload: dict,user):
         raise HTTPException(status_code=500, detail="Failed to update company")
 
 
-def delete_company(cursor,connection,company_id,confirm: bool ):
+def delete_company(cursor,connection,confirm: bool ,user):
     try:
+        company_id=user["company_id"]
         if not confirm:
             return api_response(
                 200,
@@ -145,6 +148,8 @@ def delete_company(cursor,connection,company_id,confirm: bool ):
 
         connection.commit()
 
+        # Audit logs
+        create_audit_log(cursor, connection, action="Company Deleted", entity_id=company_id, user_id=user["id"])
         return api_response(200, "company deleted successfully", company_id)
 
     except HTTPException:

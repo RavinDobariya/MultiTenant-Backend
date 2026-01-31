@@ -54,4 +54,4 @@ def update_unit_route(unit_id: str,payload: UnitCreateRequest,db=Depends(get_db)
 def delete_unite_route(unit_id: str, user=Depends(auth_role(["ADMIN"])), db=Depends(get_db),confirm: bool = False):
 
     cursor, connection = db
-    return delete_unit(cursor, connection, unit_id,confirm)
+    return delete_unit(cursor, connection, unit_id,user,confirm)

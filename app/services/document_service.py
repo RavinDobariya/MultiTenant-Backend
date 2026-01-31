@@ -341,6 +341,8 @@ def delete_document(cursor, connection, user: dict, document_id: str,confirm: bo
             raise HTTPException(status_code=404, detail="Document not found")
         connection.commit()
 
+        # Audit logs
+        create_audit_log(cursor, connection, action="Document Uploaded", entity_id=document_id, user_id=user["id"])
         return api_response(200, "Document deleted successfully", document_id)
 
     except HTTPException:
