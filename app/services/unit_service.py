@@ -159,13 +159,14 @@ def delete_unit(cursor,connection,unit_id,confirm: bool = False):
         total_unit = cursor.fetchone()
 
         # Get company_id first
-        cursor.execute("SELECT company_id FROM unit WHERE id=%s", (unit_id,))
-        row = cursor.fetchone()
+        if total_unit["total_unit"] <= 1:
+            cursor.execute("SELECT company_id FROM unit WHERE id=%s", (unit_id,))
+            row = cursor.fetchone()
 
-        if not row:
-            raise HTTPException(status_code=404, detail="Unit not found")
+            if not row:
+                raise HTTPException(status_code=404, detail="Unit not found")
 
-        company_id = row["company_id"]
+            company_id = row["company_id"]
 
         if not confirm:
             if total_unit["total_unit"] <= 1:

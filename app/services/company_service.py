@@ -132,9 +132,17 @@ def delete_company(cursor,connection,company_id,confirm: bool ):
                 "Deleting this company will remove all related data. Please confirm.",
                 {"confirm_required": True}
             )
-        cursor.execute("DELETE FROM company WHERE id=%s ",(company_id,))
-        if cursor.rowcount == 0:
-            raise HTTPException(status_code=404, detail="company not found")
+
+        cursor.execute("SELECT id FROM company WHERE id=%s", (company_id,))
+        if cursor.fetchone() is None:
+            raise HTTPException(status_code=404, detail="Company not found")
+
+        # Soft delete users
+        cursor.execute("UPDATE `user` SET is_delete=1 WHERE company_id=%s",(company_id,))
+
+        # Delete company
+        cursor.execute("DELETE FROM company WHERE id=%s",(company_id,))
+
         connection.commit()
 
         return api_response(200, "company deleted successfully", company_id)
