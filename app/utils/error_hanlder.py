@@ -8,6 +8,7 @@ def register_exception_handlers(app):
     @app.exception_handler(HTTPException)
     async def http_exception_handler(request: Request, exc: HTTPException):
         error_map = {
+            400: "BAD_REQUEST",
             401: "UNAUTHORIZED",
             403: "FORBIDDEN",
             404: "RESOURCE_NOT_FOUND",

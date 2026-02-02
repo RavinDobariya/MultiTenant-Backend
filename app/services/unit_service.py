@@ -31,7 +31,7 @@ def create_unit(cursor, connection, payload: dict,user):
         logger.info(f"Unit created with id: {unit_id} for company_id: {user['company_id']}")
         
         #Audit logs
-        create_audit_log(cursor,connection,action="Unit creation",entity_id=unit_id,user_id=user["id"])
+        create_audit_log(cursor,connection,action="UNIT_CREATED",entity_id=unit_id,user_id=user["id"])
 
         return api_response(201, "Unit created successfully", data={"unit_id": unit_id})
     except HTTPException:
@@ -80,18 +80,26 @@ def get_unit_by_id(cursor,unit_id:str):
         raise HTTPException(status_code=500, detail="Failed to fetch Unit: | {unit_id}")
 
 
-def archive_unit(cursor,connection,unit_id,user):
+def archive_unit(cursor,connection,unit_id,user,cascade):
+    """
+           Requirement:
+           - On Cascade all child docs should also be archived
+           - On Non Cascade only unit should be archived
+           - Only ADMIN can archive units
+           """
     try:
         cursor.execute("UPDATE unit SET is_archived=1,updated_at=now(),updated_by=%s WHERE id=%s AND company_id=%s",(user["id"],unit_id, user["company_id"]))
-        connection.commit()
-        logger.info(f"Unit archived with id: {unit_id} for company_id: {user['company_id']}")
 
         if cursor.rowcount == 0:
             logger.warning("Unit not found or already archived")
             raise HTTPException(404, "Unit not found or already archived")
-        
-        #Audit logs
-        create_audit_log(cursor,connection,action="Unit archived",entity_id=unit_id,user_id=user["id"])
+        if cascade:
+            cursor.execute("update document set is_archived=1 ,updated_at=now(),updated_by=%s where unit_id=%s",(user["id"],unit_id))
+        connection.commit()
+        logger.info(f"Unit archived with id: {unit_id} for company_id: {user['company_id']}")
+
+        # Audit logs
+        create_audit_log(cursor, connection, action="UNIT_ARCHIVED", entity_id=unit_id, user_id=user["id"])
         
         return api_response(200, "Unit archived")
     except HTTPException:
@@ -113,7 +121,7 @@ def unarchive_unit(cursor,connection,unit_id,user):
             raise HTTPException(404, "Unit Not Found!!")
 
         #Audit logs
-        create_audit_log(cursor,connection,action="Unit unarchived",entity_id=unit_id,user_id=user["id"])
+        create_audit_log(cursor,connection,action="UNIT_UNARCHIVED",entity_id=unit_id,user_id=user["id"])
         return api_response(200, "Unit unarchived") 
     except HTTPException:
         raise
@@ -143,7 +151,7 @@ def update_unit(cursor,connection,unit_id,payload,user):
         logger.info(f"unit updated with id={unit_id}")
         
         #Audit logs
-        create_audit_log(cursor,connection,action="Unit name updated",entity_id=unit_id,user_id=user["id"])
+        create_audit_log(cursor,connection,action="UNIT_UPDATED",entity_id=unit_id,user_id=user["id"])
         
         return api_response(status_code=201,message="unit updated")
     
@@ -190,7 +198,7 @@ def delete_unit(cursor,connection,unit_id,user,confirm: bool = False):
         connection.commit()
 
         # Audit logs
-        create_audit_log(cursor, connection, action="unit Deleted", entity_id=unit_id, user_id=user["id"])
+        create_audit_log(cursor, connection, action="UNIT_PERMANENTLY_DELETED", entity_id=unit_id, user_id=user["id"])
         logger.info(f"unit deleted successfully with id={unit_id}")
         return api_response(200, "unit deleted successfully", unit_id)
 

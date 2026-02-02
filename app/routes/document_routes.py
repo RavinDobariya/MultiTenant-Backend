@@ -41,10 +41,12 @@ def get_documents(
     type: str | None = None,
     sort_by:str | None = None,
     sort_order:str | None ="desc",
+    archived_docs:bool = False,
     db=Depends(get_db),
-    user=Depends(auth_role(["ADMIN", "EDITOR", "VIEWER"]))):
+    user=Depends(auth_role(["ADMIN", "EDITOR", "USER"]))):
     cursor, connection = db
-    data = list_documents(cursor, user, page, limit, unit_id, status, sort_by,sort_order,type_=type,)
+
+    data = list_documents(cursor, user, page, limit, unit_id, status, sort_by,sort_order,archived_docs,type_=type,)
     return api_response(200,"all docs fetched",data)
 
 

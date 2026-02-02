@@ -19,7 +19,7 @@ def create_document(cursor, connection, payload, user: dict):
     - Only ADMIN/EDITOR can upload documents
     - Unit must be in same company
     - Archived unit cannot accept new documents
-    - Document created with status=DRAFT
+    - Document created with status=DRAFT only
     """
     try:
         cursor.execute("SELECT id, is_archived FROM unit WHERE id=%s AND company_id=%s", (payload["unit_id"], user["company_id"]))
@@ -32,7 +32,7 @@ def create_document(cursor, connection, payload, user: dict):
             raise HTTPException(status_code=400, detail="Archived unit cannot accept new documents")
         while True:
             doc_id = str(uuid.uuid4())
-            cursor.execute("SELECT 1 FROM company WHERE id = %s LIMIT 1",(doc_id,))
+            cursor.execute("SELECT 1 FROM DOCUMENT WHERE id = %s LIMIT 1",(doc_id,))
 
             exists = cursor.fetchone()
             if exists:
@@ -67,7 +67,7 @@ def create_document(cursor, connection, payload, user: dict):
         log_exception(e,f"failed to Create document")
         raise HTTPException(status_code=500, detail="Failed to upload document")
 
-def list_documents(cursor, user: dict, page: int, limit: int, unit_id=None, status=None,sort_by=None,sort_order=None, type_=None):
+def list_documents(cursor, user: dict, page: int, limit: int, unit_id=None, status=None,sort_by=None,sort_order=None,archived_docs=False, type_=None):
     """
     Requirement:
     - Pagination: ?page=1&limit=10 
@@ -78,22 +78,27 @@ def list_documents(cursor, user: dict, page: int, limit: int, unit_id=None, stat
         offset = (page - 1) * limit         
         #page=1 => offset=0     (skip zero records, get first 10 records)
         #page=3 => offset=20    (skip first 20 records, get next 10 records)
+        print(archived_docs)
+        if user["role"].upper()=="ADMIN":
+            value = archived_docs
+        else :
+            value = False
 
-        where = " WHERE u.company_id = %s "
-        params = [user["company_id"]]
-
+        where = " WHERE u.company_id = %s and d.is_archived=%s"
+        params = [user["company_id"],value]
+        #print(value)
         if unit_id is not None:
             where += " AND d.unit_id = %s "
             params.append(unit_id)
 
-        if status is not None:
+        if status and status.upper()  not in [None,"ARCHIVED"]:
             where += " AND d.status = %s "
             params.append(status)
 
         if type_ is not None:
             where += " AND d.type = %s "
             params.append(type_)
-        
+
         sort_fields = {
             "created_at": "d.created_at",
             "updated_at": "d.updated_at",
@@ -199,7 +204,7 @@ def update_document(cursor, connection, payload: dict, user: dict, document_id: 
             logger.info(f"Document updated doc_id={document_id} by user_id={user['id']}")
 
             #Audit logs
-            create_audit_log(cursor,connection,action="Document Updated",entity_id=document_id,user_id=user["id"])
+            create_audit_log(cursor,connection,action="DOCUMENT_UPDATED",entity_id=document_id,user_id=user["id"])
             return api_response(201, "Document updated",document_id)
 
         if action=="ARCHIVE":
@@ -241,7 +246,7 @@ def approve_document(cursor, connection, user: dict, document_id: str):
         
         #Audit logs
         create_audit_log(cursor,connection,action="Document Approved",entity_id=document_id,user_id=user["id"])
-        return api_response(200, "Document approved",f"Doc approved: {document_id}, Doc approved by user: {user['id']}")
+        return api_response(200, "DOCUMENT_RESTORED",f"Doc approved: {document_id}, Doc approved by user: {user['id']}")
 
     except HTTPException:
         raise
@@ -278,7 +283,7 @@ def archive_document(cursor, connection, user: dict, document_id: str):
         logger.info(f"Document archived doc_id={document_id} by user_id={user['id']}")
         
         #Audit logs
-        create_audit_log(cursor,connection,action="Document Archived",entity_id=document_id,user_id=user["id"])
+        create_audit_log(cursor,connection,action="DOCUMENT_ARCHIVED",entity_id=document_id,user_id=user["id"])
         
         return api_response(201, "Document archived",f"Doc archived: {document_id}, Doc archived by user: {user['id']}")
 
@@ -324,7 +329,7 @@ async def upload_document(document_id,file: UploadFile,cursor,connection,user):
         connection.commit()
         
         #Audit logs
-        create_audit_log(cursor,connection,action="Document Uploaded",entity_id=document_id,user_id=user["id"])
+        create_audit_log(cursor,connection,action="DOCUMENT_UPLOADED",entity_id=document_id,user_id=user["id"])
         
         return api_response(201, "File uploaded successfully",file_url)
     
@@ -338,18 +343,27 @@ async def upload_document(document_id,file: UploadFile,cursor,connection,user):
 def delete_document(cursor, connection, user: dict, document_id: str,confirm: bool = False):
     try:
         if not confirm:
-            return api_response(
+            cursor.execute("update document set is_delete=1 where id=%s",(document_id,))
+            if cursor.rowcount == 0:
+                raise HTTPException(status_code=404, detail="Document not found")
+
+            cursor.execute("update audit_log set is_delete=1 where entity_id=%s",(document_id,))
+
+            connection.commit()
+            create_audit_log(cursor, connection, action="DOCUMENT_AUDIT_SOFT_DELETED", entity_id=document_id, user_id=user["id"],is_delete=True)
+            return api_response(200, "Document and related audits soft deleted ", document_id)
+            """return api_response(
                 200,
                 "Deleting this document will remove all related data. Please confirm.",
                 {"confirm_required": True}
-            )
+            )"""
         cursor.execute("DELETE FROM document WHERE id=%s ",(document_id,))
         if cursor.rowcount == 0:
-            raise HTTPException(status_code=404, detail="Document not found")
+            raise HTTPException(status_code=404, detail="DOCUMENT_PERMANENTLY_DELETED")
         connection.commit()
 
         # Audit logs
-        create_audit_log(cursor, connection, action="Document Uploaded", entity_id=document_id, user_id=user["id"])
+        create_audit_log(cursor, connection, action="Document Deleted", entity_id=document_id, user_id=user["id"],is_delete=True)
         return api_response(200, "Document deleted successfully", document_id)
 
     except HTTPException:

@@ -34,7 +34,7 @@ def create_company(cursor, connection, payload: dict,user):
         logger.info(f"Company created with name={payload['name']}")
         
         #Audit logs
-        create_audit_log(cursor,connection,action="Company Created",entity_id=company_id,user_id=user["id"])
+        create_audit_log(cursor,connection,action="COMPANY_CREATED",entity_id=company_id,user_id=user["id"])
         
         return api_response(status_code=201,message="Company created")
 
@@ -116,7 +116,7 @@ def update_company(cursor, connection,  payload: dict,user):
         logger.info(f"Company updated with id={company_id}")
         
         #Audit logs
-        create_audit_log(cursor,connection,action="Company name Updated",entity_id=company_id,user_id=user["id"])
+        create_audit_log(cursor,connection,action="COMPANY_UPDATED",entity_id=company_id,user_id=user["id"])
         return api_response(status_code=201,message="Company updated")
     
     except HTTPException:
@@ -149,7 +149,7 @@ def delete_company(cursor,connection,confirm: bool ,user):
         connection.commit()
 
         # Audit logs
-        create_audit_log(cursor, connection, action="Company Deleted", entity_id=company_id, user_id=user["id"])
+        create_audit_log(cursor, connection, action="COMPANY_PERMANENTLY_DELETED", entity_id=company_id, user_id=user["id"])
         return api_response(200, "company deleted successfully", company_id)
 
     except HTTPException:

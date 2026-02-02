@@ -33,10 +33,16 @@ def get_unit_by_id_route(unit_id: str,db=Depends(get_db),user=Depends(auth_role(
 
       
 @router.patch("/{unit_id}/archive")
-def archive_unit_route(unit_id: str, user=Depends(auth_role(["ADMIN","EDITOR"])), db=Depends(get_db)):
+def archive_unit_route(unit_id: str,cascade:bool=False, user=Depends(auth_role(["ADMIN","EDITOR"])), db=Depends(get_db)):
+    """
+    Requirement:
+    - On Cascade all child docs should also be archived
+    - On Non Cascade only unit should be archived
+    - Only ADMIN can archive units
+    """
     logger.info(f"Attempting to archive unit_id: {unit_id} for company_id: {user['company_id']}")
     cursor, connection = db
-    return archive_unit(cursor,connection,unit_id,user)
+    return archive_unit(cursor,connection,unit_id,user,cascade)
 
 
 @router.patch("/{unit_id}/unarchive")

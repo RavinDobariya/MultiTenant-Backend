@@ -3,7 +3,7 @@ from app.utils.logger import logger,log_exception
 from fastapi import HTTPException
 from app.utils.response_handler import api_response
 
-def create_audit_log(cursor, connection, action: str, entity_id: str, user_id: str):
+def create_audit_log(cursor, connection, action: str, entity_id: str, user_id: str,is_delete=False):
     """
     Create audit logs synchronously during request (PDF requirement).
     Logs who did what action on which entity.
@@ -23,10 +23,10 @@ def create_audit_log(cursor, connection, action: str, entity_id: str, user_id: s
         
         cursor.execute(
             """
-            INSERT INTO audit_log (id, action, entity_id, user_id)
-            VALUES (%s, %s, %s, %s)
+            INSERT INTO audit_log (id, action, entity_id, user_id,is_delete)
+            VALUES (%s, %s, %s, %s,%s)
             """,
-            (audit_id, action, entity_id, user_id),
+            (audit_id, action, entity_id, user_id,is_delete),
         )
         connection.commit()
         result = cursor.fetchone()
