@@ -4,7 +4,7 @@ from fastapi.encoders import jsonable_encoder
 from app.database.cursor_config import get_db
 from app.middleware.auth_me import auth_role
 from app.utils.response_handler import api_response
-from app.schemas.document_schema import DocumentCreate, DocumentUpdate
+from app.schemas.document_schema import DocumentCreate, DocumentUpdate, Action
 from app.services.document_service import (create_document, list_documents, update_document, approve_document, archive_document,upload_document,delete_document)
 from app.utils.logger import logger
 
@@ -49,10 +49,10 @@ def get_documents(
 
 
 @router.patch("/{document_id}")
-def update_doc(document_id: str, payload: DocumentUpdate, db=Depends(get_db), user=Depends(auth_role(["ADMIN", "EDITOR"]))):
+def update_doc(document_id: str, payload: DocumentUpdate,action:Action,db=Depends(get_db), user=Depends(auth_role(["ADMIN", "EDITOR"]))):
 
     cursor, connection = db
-    return update_document(cursor, connection, payload.model_dump(), user, document_id)
+    return update_document(cursor, connection, payload.model_dump(), user, document_id,action)
 
 
 @router.patch("/{document_id}/approve")

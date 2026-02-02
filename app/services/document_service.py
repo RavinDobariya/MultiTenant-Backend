@@ -123,7 +123,7 @@ def list_documents(cursor, user: dict, page: int, limit: int, unit_id=None, stat
         cursor.execute(
             f"""
             SELECT d.id, d.unit_id, d.title, d.description, d.type, d.status,
-                   d.file_url, d.created_by, d.created_at, d.approved_by, d.updated_at
+                   d.file_url, d.created_by, d.created_at, d.approved_by, d.updated_at, d.is_archived,d.archived_at
             FROM document d
             JOIN unit u ON u.id = d.unit_id
             {where}
@@ -150,7 +150,7 @@ def list_documents(cursor, user: dict, page: int, limit: int, unit_id=None, stat
         raise HTTPException(status_code=500, detail="Failed to fetch documents")
 
 
-def update_document(cursor, connection, payload: dict, user: dict, document_id: str):
+def update_document(cursor, connection, payload: dict, user: dict, document_id: str,action:str="METADATA"):
     """
     Requirement:
     - Only ADMIN/EDITOR can update documents
@@ -172,33 +172,40 @@ def update_document(cursor, connection, payload: dict, user: dict, document_id: 
         if not doc:
             raise HTTPException(status_code=404, detail="Document not found")
 
-        if doc["status"] != "DRAFT":
-            raise HTTPException(status_code=400, detail="Only DRAFT document can be updated")
 
-        fields = []         #keys only
-        values = []         #values only
+        if action=="METADATA":
+            if doc["status"] != "DRAFT":
+                raise HTTPException(status_code=400, detail="Only DRAFT document can be updated")
 
-        for key in ["title", "description", "type"]:
-            if payload.get(key) not in [None, "string"]:
-                fields.append(f"{key}=%s")          #["title=%s", "description=%s"]
-                values.append(payload[key])         #[value1, value2]
-        if not fields:
-            raise HTTPException(status_code=400, detail="No fields to update")
+            fields = []         #keys only
+            values = []         #values only
 
-        values.extend([user["id"],document_id])
+            for key in ["title", "description", "type"]:
+                if payload.get(key) not in [None, "string"]:
+                    fields.append(f"{key}=%s")          #["title=%s", "description=%s"]
+                    values.append(payload[key])         #[value1, value2]
+            if not fields:
+                raise HTTPException(status_code=400, detail="No fields to update")
 
-        cursor.execute(                                                                         #{', '.join(fields) => title=%s, description=%s
-            f"UPDATE document SET {', '.join(fields)},updated_at=now(),updated_by=%s WHERE id=%s",                             #####################
-            values,             #list[values] => ["New Title", "new.pdf", "doc_id_123"] 
-                                #tuple(values) => ("New Title", "new.pdf", "doc_id_123") both works
-        )
-        connection.commit()
+            values.extend([user["id"],document_id])
 
-        logger.info(f"Document updated doc_id={document_id} by user_id={user['id']}")
-        
-        #Audit logs
-        create_audit_log(cursor,connection,action="Document Updated",entity_id=document_id,user_id=user["id"])
-        return api_response(201, "Document updated",document_id)
+            cursor.execute(          #{', '.join(fields) => title=%s, description=%s
+                f"UPDATE document SET {', '.join(fields)},updated_at=now(),updated_by=%s WHERE id=%s",
+                values,             #list[values] => ["New Title", "new.pdf", "doc_id_123"]
+                                    #tuple(values) => ("New Title", "new.pdf", "doc_id_123") both works
+            )
+            connection.commit()
+
+            logger.info(f"Document updated doc_id={document_id} by user_id={user['id']}")
+
+            #Audit logs
+            create_audit_log(cursor,connection,action="Document Updated",entity_id=document_id,user_id=user["id"])
+            return api_response(201, "Document updated",document_id)
+
+        if action=="ARCHIVE":
+            return archive_document(cursor,connection,user,document_id)
+        if action=="RESTORE":
+            return approve_document(cursor,connection,user,document_id)
 
     except HTTPException:
         raise
@@ -211,7 +218,7 @@ def approve_document(cursor, connection, user: dict, document_id: str):
     """
     Requirement:
     - Only ADMIN can approve
-    - Valid transition: DRAFT -> APPROVED
+    - Valid transition: DRAFT || ARCHIVED -> APPROVED
     """
     try:
         cursor.execute(                                     # Approve this document only if it belongs to the current user's company and is currently in DRAFT status.
@@ -219,8 +226,8 @@ def approve_document(cursor, connection, user: dict, document_id: str):
             """
             UPDATE document d
             JOIN unit u ON u.id = d.unit_id
-            SET d.status='APPROVED', d.approved_by=%s,d.updated_at=now(),d.updated_by=%s
-            WHERE d.id=%s AND u.company_id=%s AND d.status='DRAFT'
+            SET d.status='APPROVED', d.approved_by=%s,d.updated_at=now(),d.updated_by=%s,d.is_archived=0,d.archived_at=NULL
+            WHERE d.id=%s AND u.company_id=%s AND d.status IN ('DRAFT', 'ARCHIVED')
             """,
             (user["id"],user["id"],document_id, user["company_id"]),
         )
@@ -234,7 +241,7 @@ def approve_document(cursor, connection, user: dict, document_id: str):
         
         #Audit logs
         create_audit_log(cursor,connection,action="Document Approved",entity_id=document_id,user_id=user["id"])
-        return api_response(200, "Document approved",(document_id,user['id']))
+        return api_response(200, "Document approved",f"Doc approved: {document_id}, Doc approved by user: {user['id']}")
 
     except HTTPException:
         raise
@@ -255,7 +262,7 @@ def archive_document(cursor, connection, user: dict, document_id: str):
             """                                     
             UPDATE document d 
             JOIN unit u ON u.id = d.unit_id 
-            SET d.status='ARCHIVED' ,d.updated_at=now(),d.updated_by=%s
+            SET d.status='ARCHIVED' ,d.updated_at=now(),d.updated_by=%s,d.is_archived=1,d.archived_at=now()
             WHERE d.id=%s 
             AND u.company_id=%s 
             AND d.status!='ARCHIVED'
@@ -273,7 +280,7 @@ def archive_document(cursor, connection, user: dict, document_id: str):
         #Audit logs
         create_audit_log(cursor,connection,action="Document Archived",entity_id=document_id,user_id=user["id"])
         
-        return api_response(201, "Document archived",(document_id,user["id"]))
+        return api_response(201, "Document archived",f"Doc archived: {document_id}, Doc archived by user: {user['id']}")
 
     except HTTPException:
         raise
