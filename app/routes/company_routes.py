@@ -21,21 +21,25 @@ def create_company_route(payload: CompanyCreate, db=Depends(get_db), user=Depend
 def list_companies_route(db=Depends(get_db),user=Depends(auth_role(["ADMIN", "EDITOR", "VIEWER"]))):
     cursor, connection = db
     data = list_companies(cursor)
+    logger.info(f"List companies request by admin user_id={user['id']}")
     return jsonable_encoder({"data": data})
 
 @router.get("/get-your-company")
 def get_company_by_id_route(db=Depends(get_db),user=Depends(auth_role(["ADMIN", "EDITOR", "VIEWER"]))):
     cursor,connection = db
     data = get_company_by_id(cursor,user)
+    logger.info(f"Get company by id request by admin user_id={user['id']}")
     return jsonable_encoder({"data": data})
     
 @router.patch("/update")                                                                                  #########
 def update_company_route(payload: CompanyUpdate,db=Depends(get_db),user=Depends(auth_role("ADMIN")),):
     cursor, connection = db
+    logger.info(f"Update company request by admin user_id={user['id']}")
     return update_company(cursor, connection,  payload.model_dump(),user)
 
 @router.delete("/delete")
 def delete_unite_route(confirm: bool = False, user=Depends(auth_role(["ADMIN"])), db=Depends(get_db)):
 
     cursor, connection = db
+    logger.info(f"Delete company request by admin user_id={user['id']}")
     return delete_company(cursor, connection, confirm,user)
