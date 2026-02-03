@@ -12,8 +12,11 @@ from app.utils.config import settings
 from app.utils.error_hanlder import register_exception_handlers
 from app.utils.logger import logger
 
+from app.middleware.rate_limiter import setup_rate_limit
+from app.middleware.rate_limiter import limiter
 app = FastAPI()
 
+setup_rate_limit(app,limiter)
 register_exception_handlers(app)
 
 #print(f"Starting {settings.APP_NAME} in {settings.ENV} environment") 

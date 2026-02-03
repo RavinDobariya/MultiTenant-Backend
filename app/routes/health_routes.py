@@ -2,12 +2,14 @@ from fastapi import APIRouter, Depends
 from app.database.cursor_config import get_db
 from app.utils.response_handler import api_response
 from app.utils.logger import logger
-
+from app.middleware.rate_limiter import limiter
+from fastapi import Request
 router = APIRouter(tags=["Health"])
 
 
 @router.get("/health")
-def health_check(db=Depends(get_db)):
+@limiter.limit("5/minute")
+def health_check(request: Request,db=Depends(get_db)):
     logger.info("Health check endpoint called")
     cursor, conn = db
 
