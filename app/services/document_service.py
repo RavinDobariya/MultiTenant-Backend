@@ -1,10 +1,14 @@
 import uuid
+
+from dotenv.cli import stream_file
 from fastapi import HTTPException, UploadFile
 from app.utils.logger import logger,log_exception
-from app.utils.cloudinary_files import upload_file_to_cloudinary
+from app.utils.cloudinary_files import upload_file_to_cloudinary,file_streamer
 from app.utils.response_handler import api_response
 from app.services.audit_service import create_audit_log
 from fastapi.encoders import jsonable_encoder
+from fastapi.responses import StreamingResponse
+
 ALLOWED_TYPES = {
     "application/pdf",
     "application/vnd.ms-excel",
@@ -372,3 +376,30 @@ def delete_document(cursor, connection, user: dict, document_id: str,confirm: bo
         connection.rollback()
         log_exception(e,f"Delete document failed")
         raise HTTPException(status_code=500, detail="Failed to delete document")
+
+
+def download_document(cursor,user,document_id,downloadType):
+    try:
+        if downloadType=="PDF":
+            logger.info("user request for pdf")
+            cursor.execute("SELECT id,file_url FROM document WHERE id=%s",(document_id,))
+            document = cursor.fetchone()
+            if not document:
+                raise HTTPException(status_code=404, detail="document not found!!")
+
+            file_url = document.get("file_url")
+            if not file_url:
+                raise HTTPException(status_code=404, detail="file_url not found!!")
+            logger.info(f"Document downloading doc_id={document_id} by user_id={user}")           #inline => open in browser #attachment => download file
+            return StreamingResponse(file_streamer(file_url), media_type="application/pdf",headers={"Content-Disposition":"inline; filename=doc.pdf"})
+
+        if downloadType=="AUDIO":
+            logger.info("user request for audio")
+            file_url="app/src/nature-437475.mp3"
+            return StreamingResponse(file_streamer(file_url), media_type="audio/mpeg",headers={"Content-Disposition":"inline; filename=song.mp3"})
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        log_exception(e,f"Download document failed")
+        raise HTTPException(status_code=500, detail="Failed to download document")

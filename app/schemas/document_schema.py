@@ -26,3 +26,7 @@ class DocumentUpdate(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
     type: Optional[DocumentType] = None
+
+class DownloadType(str,Enum):
+    PDF = "PDF"
+    AUDIO = "AUDIO"
