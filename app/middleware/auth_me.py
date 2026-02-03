@@ -38,3 +38,24 @@ def auth_role(required_roles: list[str] | str):
         return user
     return role_checker
 
+
+"""
+@app.middleware("http")
+async def auth_middleware(request: Request, call_next):
+
+    token = request.headers.get("Authorization")
+
+    if not token:
+        return JSONResponse(status_code=401, content={"msg": "No token"})
+
+    response = await call_next(request)
+    return response
+
+-----------------------------------------------------------
+request: Request        => get request call object   
+request.url             => http://127.0.0.1:8000/health
+request.method          => GET, POST, DELETE, PATCH
+request.headers         => Authorization","Content-Type", "Accept"
+request.query_params    => request.query_params.get("id")
+await request.json()    => Body data {"name":"Ravin"}
+"""
