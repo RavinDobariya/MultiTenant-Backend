@@ -20,7 +20,12 @@ class Settings(BaseSettings):
     CLOUDINARY_API_KEY: str
     CLOUDINARY_API_SECRET: str
     CLOUDINARY_FOLDER: str = "fastapi_docs"
-    
+
+    DATABASE_URL: str
+
+    REDIS_URL: str
+    DEFAULT_TTL: int
+
     LOG_LEVEL: str = "INFO"
 
     class Config:
