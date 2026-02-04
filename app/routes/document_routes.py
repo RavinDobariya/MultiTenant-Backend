@@ -19,7 +19,7 @@ router = APIRouter(prefix="/documents", tags=["Documents"])
 """
 
 @router.post("/create")
-def create_doc(payload: DocumentCreate, db=Depends(get_db), user=Depends(auth_role(["ADMIN", "EDITOR"]))):
+async def create_doc(payload: DocumentCreate, db=Depends(get_db), user=Depends(auth_role(["ADMIN", "EDITOR"]))):
     """
     unit_id: str \n
     title: str  \n
@@ -30,10 +30,10 @@ def create_doc(payload: DocumentCreate, db=Depends(get_db), user=Depends(auth_ro
     cursor, connection = db
     
     logger.info(f"create document request by user_id={user['id']}")
-    return create_document(cursor, connection, payload.model_dump(), user)
+    return await create_document(cursor, connection, payload.model_dump(), user)
 
 @router.get("")
-def get_documents(
+async def get_documents(
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=10, ge=1, le=100),
     unit_id: str | None = None,
@@ -45,29 +45,29 @@ def get_documents(
     user=Depends(auth_role(["ADMIN", "EDITOR", "VIEWER"])),
 ):
     cursor, connection = db
-    data = list_documents(cursor, user, page, limit, unit_id, status, sort_by,sort_order,type_=type,)
+    data = await list_documents(cursor, user, page, limit, unit_id, status, sort_by,sort_order,type_=type,)
     return jsonable_encoder({"data": data})
 
 
 @router.patch("/{document_id}")
-def update_doc(document_id: str, payload: DocumentUpdate, db=Depends(get_db), user=Depends(auth_role(["ADMIN", "EDITOR"]))):
+async def update_doc(document_id: str, payload: DocumentUpdate, db=Depends(get_db), user=Depends(auth_role(["ADMIN", "EDITOR"]))):
 
     cursor, connection = db
-    return update_document(cursor, connection, payload.model_dump(), user, document_id)
+    return await update_document(cursor, connection, payload.model_dump(), user, document_id)
 
 
 @router.patch("/{document_id}/approve")
-def approve_doc(document_id: str, db=Depends(get_db), user=Depends(auth_role(["ADMIN"]))):
+async def approve_doc(document_id: str, db=Depends(get_db), user=Depends(auth_role(["ADMIN"]))):
 
     cursor, connection = db
-    return approve_document(cursor, connection, user, document_id)
+    return await approve_document(cursor, connection, user, document_id)
 
 
 @router.patch("/{document_id}/archive")
-def archive_doc(document_id: str, db=Depends(get_db), user=Depends(auth_role(["ADMIN"]))):
+async def archive_doc(document_id: str, db=Depends(get_db), user=Depends(auth_role(["ADMIN"]))):
 
     cursor, connection = db
-    return archive_document(cursor, connection, user, document_id)
+    return await archive_document(cursor, connection, user, document_id)
 
 @router.post("/upload/{document_id}")
 async def upload_doc(                   

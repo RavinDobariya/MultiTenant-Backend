@@ -4,6 +4,9 @@ from app.utils.logger import logger
 from app.utils.cloudinary_files import upload_file_to_cloudinary
 from app.utils.response_handler import api_response
 
+from app.utils.cache import cache_set, cache_get, cache_delete,cache_delete_pattern
+from app.utils.cache_keys import create_cache_key,create_list_cache_key
+
 ALLOWED_TYPES = {
     "application/pdf",
     "application/vnd.ms-excel",
@@ -12,7 +15,7 @@ ALLOWED_TYPES = {
 
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
 
-def create_document(cursor, connection, payload, user: dict):
+async def create_document(cursor, connection, payload, user: dict):
     """
     Requirement:
     - Only ADMIN/EDITOR can upload documents
@@ -21,6 +24,8 @@ def create_document(cursor, connection, payload, user: dict):
     - Document created with status=DRAFT
     """
     try:
+
+
         cursor.execute("SELECT id, is_archived FROM unit WHERE id=%s AND company_id=%s", (payload["unit_id"], user["company_id"]))
         unit = cursor.fetchone()
 
@@ -40,7 +45,7 @@ def create_document(cursor, connection, payload, user: dict):
                 break
 
         cursor.execute(
-            "INSERT INTO document (id, unit_id, title, description, type, status, created_by) VALUES ( %s,%s, %s, %s, %s, 'DRAFT', %s)",
+            "INSERT INTO document (id, unit_id, title, description, type, status, created_by,updated_by) VALUES ( %s,%s, %s, %s, %s, 'DRAFT', %s,%s)",
             (
                 doc_id,
                 payload["unit_id"],
@@ -48,9 +53,14 @@ def create_document(cursor, connection, payload, user: dict):
                 payload.get("description"),         # optional return None if not provided
                 payload["type"],
                 user["id"],
+                user["id"]
             ),
         )
         connection.commit()
+
+        # No need to cache single doc key on Document creation
+
+        await cache_delete_pattern("key_document*")
 
         logger.info(f"Document uploaded doc_id={doc_id} by user_id={user['id']}")
         return api_response(201, "Document created", doc_id)
@@ -62,14 +72,29 @@ def create_document(cursor, connection, payload, user: dict):
         raise HTTPException(status_code=500, detail="Failed to upload document")
 
 
-def list_documents(cursor, user: dict, page: int, limit: int, unit_id=None, status=None,sort_by=None,sort_order=None, type_=None):
+async def list_documents(cursor, user: dict, page: int, limit: int, unit_id=None, status=None,sort_by=None,sort_order=None, type_=None):
     """
     Requirement:
     - Pagination: ?page=1&limit=10 
     - Filtering: type, status, unit_id
     - Must return only documents from user's company
     """
-    try:                
+    try:
+        filter_query = {}
+        if status:
+            filter_query["status"] = status
+        if  type_:
+            filter_query["type"] = type_
+        #create cache key
+        cache_key = create_list_cache_key("document",page,limit,filter_query)
+
+        #check cache
+        cached_data = await cache_get(cache_key)
+
+        if cached_data:
+            return cached_data
+
+
         offset = (page - 1) * limit         
         #page=1 => offset=0     (skip zero records, get first 10 records)
         #page=3 => offset=20    (skip first 20 records, get next 10 records)
@@ -136,6 +161,9 @@ def list_documents(cursor, user: dict, page: int, limit: int, unit_id=None, stat
             "sort_order": sort_order,
             "data": rows
             }
+
+        # save to cache
+        await cache_set(cache_key,data)
         return data
 
     except HTTPException:
@@ -145,7 +173,7 @@ def list_documents(cursor, user: dict, page: int, limit: int, unit_id=None, stat
         raise HTTPException(status_code=500, detail="Failed to fetch documents")
 
 
-def update_document(cursor, connection, payload: dict, user: dict, document_id: str):
+async def update_document(cursor, connection, payload: dict, user: dict, document_id: str):
     """
     Requirement:
     - Only ADMIN/EDITOR can update documents
@@ -153,6 +181,12 @@ def update_document(cursor, connection, payload: dict, user: dict, document_id: 
     - Must belong to same company
     """
     try:
+        # create cache key
+        cache_key = create_cache_key("document",document_id)
+
+        await cache_delete(cache_key)
+        await cache_delete_pattern("key_document*")
+
         cursor.execute(                             
             """
             SELECT d.id, d.status 
@@ -200,13 +234,20 @@ def update_document(cursor, connection, payload: dict, user: dict, document_id: 
         raise HTTPException(status_code=500, detail="Failed to update document")
 
 
-def approve_document(cursor, connection, user: dict, document_id: str):
+async def approve_document(cursor, connection, user: dict, document_id: str):
     """
     Requirement:
     - Only ADMIN can approve
     - Valid transition: DRAFT -> APPROVED
     """
     try:
+
+        # create cache key
+        cache_key = create_cache_key("document", document_id)
+
+        await cache_delete(cache_key)
+        await cache_delete_pattern("key_document*")
+
         cursor.execute(                                     # Approve this document only if it belongs to the current user's company and is currently in DRAFT status.
 
             """
@@ -233,13 +274,19 @@ def approve_document(cursor, connection, user: dict, document_id: str):
         raise HTTPException(status_code=500, detail="Failed to approve document")
 
 
-def archive_document(cursor, connection, user: dict, document_id: str):
+async def archive_document(cursor, connection, user: dict, document_id: str):
     """
     Requirement:
     - Delete documents = soft delete (draft || approved -> archived)
     - Valid transition: APPROVED -> ARCHIVED (and DRAFT -> ARCHIVED also ok)
     """
-    try:                                            #document → unit → company  => doc doesnt have company_id directly
+    try:
+        # create cache key
+        cache_key = create_cache_key("document", document_id)
+
+        await cache_delete(cache_key)
+        await cache_delete_pattern("key_document*")
+                                                    #document → unit → company  => doc doesnt have company_id directly
                                                     #Archive this document only if it belongs to the current users company and it is not already archived.
         cursor.execute( 
             """                                     
@@ -270,6 +317,12 @@ def archive_document(cursor, connection, user: dict, document_id: str):
 
 async def upload_document(document_id,file: UploadFile,cursor,connection,user):
     try:
+
+        # create cache key
+        cache_key = create_cache_key("document" ,document_id)
+        await cache_delete_pattern("key_document*")
+        await cache_delete(cache_key)
+
         # validate type
         if file.content_type not in ALLOWED_TYPES:          #file.content_type → "application/pdf" (MIME type)
             raise HTTPException(status_code=400,detail=f"Invalid file type: {file.content_type}")
