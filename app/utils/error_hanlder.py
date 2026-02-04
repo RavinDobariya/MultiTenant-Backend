@@ -8,6 +8,7 @@ def register_exception_handlers(app):
     @app.exception_handler(HTTPException)
     async def http_exception_handler(request: Request, exc: HTTPException):
         error_map = {
+            400: "BAD_REQUEST",
             401: "UNAUTHORIZED",
             403: "FORBIDDEN",
             404: "RESOURCE_NOT_FOUND",
@@ -22,6 +23,18 @@ def register_exception_handlers(app):
                 "message": str(exc.detail),
             },
         )
+
+    """
+    API calls:
+    raise HTTPException(status_code=404, detail="Unit not found")
+    
+    It Becomes:
+    exc = HTTPException(status_code=404,detail="Unit not found")
+    
+    Access like:
+    exc.status_code = 404
+    exc.detail = "Unit not found"
+    """
 
     @app.exception_handler(RequestValidationError)
     async def validation_exception_handler(request: Request, exc: RequestValidationError):

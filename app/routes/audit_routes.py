@@ -3,13 +3,13 @@ from fastapi.encoders import jsonable_encoder
 
 from app.database.cursor_config import get_db
 from app.middleware.auth_me import auth_role
-from app.services.audit_service import list_audit_logs_service,create_audit_log
+from app.services.audit_service import list_audit_logs_service,create_audit_log,get_user_audit_log
 from app.utils.logger import logger
 from app.schemas.audit_schema import AuditCreate
 router = APIRouter(prefix="/audit-logs", tags=["Audit Logs"])
 
 
-@router.get("")
+@router.get("/list")  
 def list_audit_logs(
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=20, ge=1, le=100),
@@ -20,6 +20,7 @@ def list_audit_logs(
     user=Depends(auth_role("ADMIN")),
 ):
     cursor, connection = db
+    logger.info(f"Audit routes")
 
     result = list_audit_logs_service(
         cursor=cursor,
@@ -32,6 +33,13 @@ def list_audit_logs(
 
     logger.info(f"Audit logs fetched by admin user_id={user['id']}")
     return jsonable_encoder(result)
+
+
+@router.get("/user-audits")
+def get_user_audit_log_route(db=Depends(get_db),user=Depends(auth_role(["ADMIN", "EDITOR", "VIEWER"]))):
+    cursor,connection = db
+    data = get_user_audit_log(cursor,user)
+    return jsonable_encoder({"data": data})
 
 
 @router.post("/create")
@@ -51,4 +59,4 @@ def create_audit(
     )
 
     logger.info(f"Audit created by admin={user['id']}")
-    return jsonable_encoder(result)
+    return result

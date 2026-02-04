@@ -9,7 +9,10 @@ class DocumentType(str, Enum):
     REPORT = "REPORT"           
 DocumentStatus = Literal["DRAFT", "APPROVED", "ARCHIVED"]       #not used yet!!!!!!!!!!!
 
-
+class Action(str,Enum):
+    METADATA = "METADATA"
+    ARCHIVE = "ARCHIVE"
+    RESTORE = "RESTORE"
 
 class DocumentCreate(BaseModel):
     unit_id: str
@@ -23,4 +26,7 @@ class DocumentUpdate(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
     type: Optional[DocumentType] = None
-    file_url: Optional[str] = None
+
+class DownloadType(str,Enum):
+    PDF = "PDF"
+    AUDIO = "AUDIO"

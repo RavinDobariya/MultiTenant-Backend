@@ -2,7 +2,7 @@
 
 from fastapi import HTTPException, Depends
 from app.utils.security import create_access_token, create_refresh_token, verify_password
-from app.utils.logger import logger
+from app.utils.logger import logger,log_exception
 from app.utils.error_hanlder import register_exception_handlers
 from app.utils.security import hash_password
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -55,7 +55,7 @@ def auth_signup(cursor, conn, payload):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error during signup for email: {payload.email}, error: {str(e)}")
+        log_exception(e,f"Error during signup for email: {payload.email}")
         raise HTTPException(500, "Signup failed")
 
 
@@ -92,7 +92,7 @@ def auth_login(cursor, conn, payload):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error during login for email: {payload.email}, error: {str(e)}")
+        log_exception(e,f"Auth Login Failed | email={payload.email}")
         raise HTTPException(500, "Login failed")
 
 def auth_refresh(cursor, conn, refresh_token: str):
@@ -115,7 +115,7 @@ def auth_refresh(cursor, conn, refresh_token: str):
         user = cursor.fetchone()
 
         if not user:
-            logger.error(f"User not found for refresh token: {refresh_token}")
+            logger.warning(f"User not found for refresh token: {refresh_token}")
             raise HTTPException(401, "User not found")
 
         # create new access token
@@ -130,7 +130,7 @@ def auth_refresh(cursor, conn, refresh_token: str):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error during token refresh, error: {str(e)}")
+        log_exception(e,f"Error during token refresh error | {refresh_token}")
         raise HTTPException(500, "Token refresh failed")
     
 def auth_logout(cursor, conn,user):
@@ -156,5 +156,25 @@ def auth_logout(cursor, conn,user):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error during logout, error: {str(e)}")
+        log_exception(e,f"Error during logout | {user_id}")
         raise HTTPException(500, "Logout failed")
+
+
+def delete_user(cursor, connection,user,confirm: bool ):
+    try:
+        if not confirm:
+            return (
+                "Deleting this document will remove all related data. Please confirm.",
+                {"confirm_required": True}
+            )
+        cursor.execute("UPDATE `user` SET is_delete = 1  WHERE id=%s ",(user["id"],))
+        connection.commit()
+
+        return { "message": f"User deleted successfully {user['id']}"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        connection.rollback()
+        log_exception(e,f"Delete document failed")
+        raise HTTPException(status_code=500, detail="Failed to delete document")

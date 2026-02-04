@@ -1,8 +1,13 @@
 import uuid
-from fastapi import HTTPException, UploadFile, File
-from app.utils.logger import logger
-from app.utils.cloudinary_files import upload_file_to_cloudinary
+
+from dotenv.cli import stream_file
+from fastapi import HTTPException, UploadFile
+from app.utils.logger import logger,log_exception
+from app.utils.cloudinary_files import upload_file_to_cloudinary,file_streamer
 from app.utils.response_handler import api_response
+from app.services.audit_service import create_audit_log
+from fastapi.encoders import jsonable_encoder
+from fastapi.responses import StreamingResponse
 
 from app.utils.cache import cache_set, cache_get, cache_delete,cache_delete_pattern
 from app.utils.cache_keys import create_cache_key,create_list_cache_key
@@ -21,7 +26,7 @@ async def create_document(cursor, connection, payload, user: dict):
     - Only ADMIN/EDITOR can upload documents
     - Unit must be in same company
     - Archived unit cannot accept new documents
-    - Document created with status=DRAFT
+    - Document created with status=DRAFT only
     """
     try:
 
@@ -36,7 +41,7 @@ async def create_document(cursor, connection, payload, user: dict):
             raise HTTPException(status_code=400, detail="Archived unit cannot accept new documents")
         while True:
             doc_id = str(uuid.uuid4())
-            cursor.execute("SELECT 1 FROM company WHERE id = %s LIMIT 1",(doc_id,))
+            cursor.execute("SELECT 1 FROM DOCUMENT WHERE id = %s LIMIT 1",(doc_id,))
 
             exists = cursor.fetchone()
             if exists:
@@ -45,7 +50,7 @@ async def create_document(cursor, connection, payload, user: dict):
                 break
 
         cursor.execute(
-            "INSERT INTO document (id, unit_id, title, description, type, status, created_by,updated_by) VALUES ( %s,%s, %s, %s, %s, 'DRAFT', %s,%s)",
+            "INSERT INTO document (id, unit_id, title, description, type, status, created_by,updated_at,updated_by) VALUES ( %s,%s, %s, %s, %s, 'DRAFT', %s,now(),%s)",
             (
                 doc_id,
                 payload["unit_id"],
@@ -63,16 +68,19 @@ async def create_document(cursor, connection, payload, user: dict):
         await cache_delete_pattern("key_document*")
 
         logger.info(f"Document uploaded doc_id={doc_id} by user_id={user['id']}")
+
+        #Audit logs
+        create_audit_log(cursor,connection,action="Document Created",entity_id=doc_id,user_id=user["id"])
+
         return api_response(201, "Document created", doc_id)
 
     except HTTPException:
         raise 
     except Exception as e:
-        logger.error(f"Create document failed: {e}")
+        log_exception(e,f"failed to Create document")
         raise HTTPException(status_code=500, detail="Failed to upload document")
 
-
-async def list_documents(cursor, user: dict, page: int, limit: int, unit_id=None, status=None,sort_by=None,sort_order=None, type_=None):
+async def list_documents(cursor, user: dict, page: int, limit: int, unit_id=None, status=None,sort_by=None,sort_order=None,archived_docs=False, type_=None):
     """
     Requirement:
     - Pagination: ?page=1&limit=10 
@@ -98,22 +106,27 @@ async def list_documents(cursor, user: dict, page: int, limit: int, unit_id=None
         offset = (page - 1) * limit         
         #page=1 => offset=0     (skip zero records, get first 10 records)
         #page=3 => offset=20    (skip first 20 records, get next 10 records)
+        print(archived_docs)
+        if user["role"].upper()=="ADMIN":
+            value = archived_docs
+        else :
+            value = False
 
-        where = " WHERE u.company_id = %s "
-        params = [user["company_id"]]
-
+        where = " WHERE u.company_id = %s and d.is_archived=%s"
+        params = [user["company_id"],value]
+        #print(value)
         if unit_id is not None:
             where += " AND d.unit_id = %s "
             params.append(unit_id)
 
-        if status is not None:
+        if status and status.upper()  not in [None,"ARCHIVED"]:
             where += " AND d.status = %s "
             params.append(status)
 
         if type_ is not None:
             where += " AND d.type = %s "
             params.append(type_)
-        
+
         sort_fields = {
             "created_at": "d.created_at",
             "updated_at": "d.updated_at",
@@ -143,7 +156,7 @@ async def list_documents(cursor, user: dict, page: int, limit: int, unit_id=None
         cursor.execute(
             f"""
             SELECT d.id, d.unit_id, d.title, d.description, d.type, d.status,
-                   d.file_url, d.created_by, d.created_at, d.approved_by, d.updated_at
+                   d.file_url, d.created_by, d.created_at, d.approved_by, d.updated_at, d.is_archived,d.archived_at
             FROM document d
             JOIN unit u ON u.id = d.unit_id
             {where}
@@ -161,19 +174,18 @@ async def list_documents(cursor, user: dict, page: int, limit: int, unit_id=None
             "sort_order": sort_order,
             "data": rows
             }
-
         # save to cache
         await cache_set(cache_key,data)
-        return data
+        return jsonable_encoder(data)           # return data conflict
 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"List documents failed: {e}")
+        log_exception(e,f"failed to list document")
         raise HTTPException(status_code=500, detail="Failed to fetch documents")
 
 
-async def update_document(cursor, connection, payload: dict, user: dict, document_id: str):
+async def update_document(cursor, connection, payload: dict, user: dict, document_id: str,action:str="METADATA"):
     """
     Requirement:
     - Only ADMIN/EDITOR can update documents
@@ -187,7 +199,7 @@ async def update_document(cursor, connection, payload: dict, user: dict, documen
         await cache_delete(cache_key)
         await cache_delete_pattern("key_document*")
 
-        cursor.execute(                             
+        cursor.execute(
             """
             SELECT d.id, d.status 
             FROM document d
@@ -201,36 +213,45 @@ async def update_document(cursor, connection, payload: dict, user: dict, documen
         if not doc:
             raise HTTPException(status_code=404, detail="Document not found")
 
-        if doc["status"] != "DRAFT":
-            raise HTTPException(status_code=400, detail="Only DRAFT document can be updated")
 
-        fields = []         #keys only
-        values = []         #values only
+        if action=="METADATA":
+            if doc["status"] != "DRAFT":
+                raise HTTPException(status_code=400, detail="Only DRAFT document can be updated")
 
-        for key in ["title", "description", "type", "file_url"]:
-            if payload.get(key) is not None:
-                fields.append(f"{key}=%s")          #["title=%s", "description=%s"]
-                values.append(payload[key])         #[value1, value2]
+            fields = []         #keys only
+            values = []         #values only
 
-        if not fields:
-            raise HTTPException(status_code=400, detail="No fields to update")
+            for key in ["title", "description", "type"]:
+                if payload.get(key) not in [None, "string"]:
+                    fields.append(f"{key}=%s")          #["title=%s", "description=%s"]
+                    values.append(payload[key])         #[value1, value2]
+            if not fields:
+                raise HTTPException(status_code=400, detail="No fields to update")
 
-        values.append(document_id)
+            values.extend([user["id"],document_id])
 
-        cursor.execute(                                                                         #{', '.join(fields) => title=%s, description=%s
-            f"UPDATE document SET {', '.join(fields)} WHERE id=%s",                             #####################
-            values,             #list[values] => ["New Title", "new.pdf", "doc_id_123"] 
-                                #tuple(values) => ("New Title", "new.pdf", "doc_id_123") both works
-        )
-        connection.commit()
+            cursor.execute(          #{', '.join(fields) => title=%s, description=%s
+                f"UPDATE document SET {', '.join(fields)},updated_at=now(),updated_by=%s WHERE id=%s",
+                values,             #list[values] => ["New Title", "new.pdf", "doc_id_123"]
+                                    #tuple(values) => ("New Title", "new.pdf", "doc_id_123") both works
+            )
+            connection.commit()
 
-        logger.info(f"Document updated doc_id={document_id} by user_id={user['id']}")
-        return api_response(201, "Document updated",(document_id,user["id"]))
+            logger.info(f"Document updated doc_id={document_id} by user_id={user['id']}")
+
+            #Audit logs
+            create_audit_log(cursor,connection,action="DOCUMENT_UPDATED",entity_id=document_id,user_id=user["id"])
+            return api_response(201, "Document updated",document_id)
+
+        if action=="ARCHIVE":
+            return archive_document(cursor,connection,user,document_id)
+        if action=="RESTORE":
+            return approve_document(cursor,connection,user,document_id)
 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Update document failed: {e}")
+        log_exception(e,f"failed to Update document")
         raise HTTPException(status_code=500, detail="Failed to update document")
 
 
@@ -238,7 +259,7 @@ async def approve_document(cursor, connection, user: dict, document_id: str):
     """
     Requirement:
     - Only ADMIN can approve
-    - Valid transition: DRAFT -> APPROVED
+    - Valid transition: DRAFT || ARCHIVED -> APPROVED
     """
     try:
 
@@ -253,10 +274,10 @@ async def approve_document(cursor, connection, user: dict, document_id: str):
             """
             UPDATE document d
             JOIN unit u ON u.id = d.unit_id
-            SET d.status='APPROVED', d.approved_by=%s
-            WHERE d.id=%s AND u.company_id=%s AND d.status='DRAFT'
+            SET d.status='APPROVED', d.approved_by=%s,d.updated_at=now(),d.updated_by=%s,d.is_archived=0,d.archived_at=NULL
+            WHERE d.id=%s AND u.company_id=%s AND d.status IN ('DRAFT', 'ARCHIVED')
             """,
-            (user["id"], document_id, user["company_id"]),
+            (user["id"],user["id"],document_id, user["company_id"]),
         )
 
         if cursor.rowcount == 0:
@@ -265,12 +286,15 @@ async def approve_document(cursor, connection, user: dict, document_id: str):
         connection.commit()
 
         logger.info(f"Document approved doc_id={document_id} by user_id={user['id']}")
-        return api_response(200, "Document approved",(document_id,user['id']))
+
+        #Audit logs
+        create_audit_log(cursor,connection,action="Document Approved",entity_id=document_id,user_id=user["id"])
+        return api_response(200, "DOCUMENT_RESTORED",f"Doc approved: {document_id}, Doc approved by user: {user['id']}")
 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Approve document failed: {e}")
+        log_exception(e,f"Approve document failed")
         raise HTTPException(status_code=500, detail="Failed to approve document")
 
 
@@ -292,12 +316,12 @@ async def archive_document(cursor, connection, user: dict, document_id: str):
             """                                     
             UPDATE document d 
             JOIN unit u ON u.id = d.unit_id 
-            SET d.status='ARCHIVED' 
+            SET d.status='ARCHIVED' ,d.updated_at=now(),d.updated_by=%s,d.is_archived=1,d.archived_at=now()
             WHERE d.id=%s 
             AND u.company_id=%s 
             AND d.status!='ARCHIVED'
             """,
-            (document_id, user["company_id"]),
+            (user["id"],document_id, user["company_id"]),
         )
 
         if cursor.rowcount == 0:
@@ -306,12 +330,16 @@ async def archive_document(cursor, connection, user: dict, document_id: str):
         connection.commit()
 
         logger.info(f"Document archived doc_id={document_id} by user_id={user['id']}")
-        return api_response(201, "Document archived",(document_id,user["id"]))
+
+        #Audit logs
+        create_audit_log(cursor,connection,action="DOCUMENT_ARCHIVED",entity_id=document_id,user_id=user["id"])
+
+        return api_response(201, "Document archived",f"Doc archived: {document_id}, Doc archived by user: {user['id']}")
 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Archive document failed: {e}")
+        log_exception(e,f"Archive document failed")
         raise HTTPException(status_code=500, detail="Failed to archive document")
 
 
@@ -345,20 +373,84 @@ async def upload_document(document_id,file: UploadFile,cursor,connection,user):
             """
             UPDATE document d
             JOIN unit u ON u.id = d.unit_id
-            SET d.file_url = %s
+            SET d.file_url = %s,d.updated_at=now(),d.updated_by=%s
             WHERE d.id = %s AND u.company_id = %s
             """,
-            (file_url, document_id, user["company_id"])
-        ) 
-        
+            (file_url,user["id"], document_id, user["company_id"])
+        )
         if cursor.rowcount == 0:
             raise HTTPException(status_code=404, detail="document not found!!")
         
         connection.commit()
+
+        #Audit logs
+        create_audit_log(cursor,connection,action="DOCUMENT_UPLOADED",entity_id=document_id,user_id=user["id"])
+
         return api_response(201, "File uploaded successfully",file_url)
     
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"failed to upload an file: {e}")
+        log_exception(e,f"failed to upload an file")
         raise HTTPException(500,"Error while uploading file")
+
+
+def delete_document(cursor, connection, user: dict, document_id: str,confirm: bool = False):
+    try:
+        if not confirm:
+            cursor.execute("update document set is_delete=1 where id=%s",(document_id,))
+            if cursor.rowcount == 0:
+                raise HTTPException(status_code=404, detail="Document not found")
+
+            cursor.execute("update audit_log set is_delete=1 where entity_id=%s",(document_id,))
+
+            connection.commit()
+            create_audit_log(cursor, connection, action="DOCUMENT_AUDIT_SOFT_DELETED", entity_id=document_id, user_id=user["id"],is_delete=True)
+            return api_response(200, "Document and related audits soft deleted ", document_id)
+            """return api_response(
+                200,
+                "Deleting this document will remove all related data. Please confirm.",
+                {"confirm_required": True}
+            )"""
+        cursor.execute("DELETE FROM document WHERE id=%s ",(document_id,))
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="DOCUMENT_PERMANENTLY_DELETED")
+        connection.commit()
+
+        # Audit logs
+        create_audit_log(cursor, connection, action="Document Deleted", entity_id=document_id, user_id=user["id"],is_delete=True)
+        return api_response(200, "Document deleted successfully", document_id)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        connection.rollback()
+        log_exception(e,f"Delete document failed")
+        raise HTTPException(status_code=500, detail="Failed to delete document")
+
+
+def download_document(cursor,user,document_id,downloadType):
+    try:
+        if downloadType=="PDF":
+            logger.info("user request for pdf")
+            cursor.execute("SELECT id,file_url FROM document WHERE id=%s",(document_id,))
+            document = cursor.fetchone()
+            if not document:
+                raise HTTPException(status_code=404, detail="document not found!!")
+
+            file_url = document.get("file_url")
+            if not file_url:
+                raise HTTPException(status_code=404, detail="file_url not found!!")
+            logger.info(f"Document downloading doc_id={document_id} by user_id={user}")           #inline => open in browser #attachment => download file
+            return StreamingResponse(file_streamer(file_url), media_type="application/pdf",headers={"Content-Disposition":"inline; filename=doc.pdf"})
+
+        if downloadType=="AUDIO":
+            logger.info("user request for audio")
+            file_url="app/src/nature-437475.mp3"
+            return StreamingResponse(file_streamer(file_url), media_type="audio/mpeg",headers={"Content-Disposition":"inline; filename=song.mp3"})
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        log_exception(e,f"Download document failed")
+        raise HTTPException(status_code=500, detail="Failed to download document")

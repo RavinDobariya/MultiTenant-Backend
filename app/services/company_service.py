@@ -1,10 +1,11 @@
 from fastapi import HTTPException
-from app.utils.logger import logger
+from app.utils.logger import logger,log_exception
+from app.services.audit_service import create_audit_log
 from fastapi.encoders import jsonable_encoder
 from app.utils.response_handler import api_response  
 import uuid
 
-def create_company(cursor, connection, payload: dict):
+def create_company(cursor, connection, payload: dict,user):
     """
     Requirement:
     - Only ADMIN can create companies
@@ -27,16 +28,20 @@ def create_company(cursor, connection, payload: dict):
             else:
                 break
             
-        cursor.execute("INSERT INTO company (id,name, created_at) VALUES (%s,%s, NOW())",[company_id,payload["name"]])
+        cursor.execute("INSERT INTO company (id,name, created_at, created_by,updated_at,updated_by) VALUES (%s,%s, NOW(),%s,Now(),%s)",[company_id,payload["name"],user["id"],user["id"]])
         connection.commit()
 
         logger.info(f"Company created with name={payload['name']}")
+        
+        #Audit logs
+        create_audit_log(cursor,connection,action="COMPANY_CREATED",entity_id=company_id,user_id=user["id"])
+        
         return api_response(status_code=201,message="Company created")
 
     except HTTPException:
         raise 
     except Exception as e:
-        logger.error(f"Create company failed: {e}")
+        log_exception(e,f"Failed to create company")
         raise HTTPException(status_code=500, detail="Failed to create company")
 
 
@@ -50,16 +55,48 @@ def list_companies(cursor):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"List companies failed: {e}")
-        raise HTTPException(status_code=500, detail="Failed to fetch companies")
+        log_exception(e,f"failed to List companies")
+        raise HTTPException(status_code=500, detail="Failed to fetch companies ")
 
-def update_company(cursor, connection, company_id: str, payload: dict):
+def get_company_by_id(cursor,user):
+    try:
+        company_id=user["company_id"]
+        # Get company
+        cursor.execute("SELECT id, name FROM company WHERE id = %s",(company_id,))
+        company = cursor.fetchone()
+
+        if not company:
+            raise HTTPException(status_code=404, detail="Company not found")
+
+        # Get users
+        cursor.execute("SELECT id, email FROM user WHERE company_id = %s",(company_id,))
+        users = cursor.fetchall()
+
+        # Get units
+        cursor.execute("SELECT id, name FROM unit WHERE company_id = %s",(company_id,))
+        units = cursor.fetchall()
+
+        return {
+        "company id": company["id"],
+        "company name": company["name"],
+        "company users": users,
+        "company units": units
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        log_exception(e,f"failed to get company | {company_id}")
+        raise HTTPException(status_code=500, detail="Failed to fetch company: | {company_id}")
+
+def update_company(cursor, connection,  payload: dict,user):
     """
     Requirement:
     - Only ADMIN can update companies
     - Company name must be unique
     """
     try:
+        company_id=user["company_id"]
         cursor.execute("SELECT id FROM company WHERE id=%s", (company_id,))
         existing_company = cursor.fetchone()
         
@@ -73,14 +110,51 @@ def update_company(cursor, connection, company_id: str, payload: dict):
             name_conflict = cursor.fetchone()
             if name_conflict:
                 raise HTTPException(status_code=409, detail="Company name already taken")
-            cursor.execute("UPDATE company SET name=%s WHERE id=%s", (payload["name"], company_id))
+            cursor.execute("UPDATE company SET name=%s,updated_at=Now(),updated_by=%s WHERE id=%s", (payload["name"],user["id"], company_id))
         connection.commit()
         
         logger.info(f"Company updated with id={company_id}")
+        
+        #Audit logs
+        create_audit_log(cursor,connection,action="COMPANY_UPDATED",entity_id=company_id,user_id=user["id"])
         return api_response(status_code=201,message="Company updated")
     
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Update company failed: {e}")
-        raise HTTPException(status_code=500, detail="Failed to update company")  
+        log_exception(e,f"Update company failed")
+        raise HTTPException(status_code=500, detail="Failed to update company")
+
+
+def delete_company(cursor,connection,confirm: bool ,user):
+    try:
+        company_id=user["company_id"]
+        if not confirm:
+            return api_response(
+                200,
+                "Deleting this company will remove all related data. Please confirm.",
+                {"confirm_required": True}
+            )
+
+        cursor.execute("SELECT id FROM company WHERE id=%s", (company_id,))
+        if cursor.fetchone() is None:
+            raise HTTPException(status_code=404, detail="Company not found")
+
+        # Soft delete users
+        cursor.execute("UPDATE `user` SET is_delete=1 WHERE company_id=%s",(company_id,))
+
+        # Delete company
+        cursor.execute("DELETE FROM company WHERE id=%s",(company_id,))
+
+        connection.commit()
+
+        # Audit logs
+        create_audit_log(cursor, connection, action="COMPANY_PERMANENTLY_DELETED", entity_id=company_id, user_id=user["id"])
+        return api_response(200, "company deleted successfully", company_id)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        log_exception(e, f"Failed to delete company")
+        connection.rollback()
+        raise HTTPException(500, "Failed to delete company")

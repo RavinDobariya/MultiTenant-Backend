@@ -1,5 +1,7 @@
-from app.utils.logger import logger
+from app.utils.logger import logger,log_exception
 from app.utils.response_handler import api_response
+from app.services.audit_service import create_audit_log
+from app.services.company_service import delete_company
 import uuid
 from fastapi import HTTPException
 from fastapi.encoders import jsonable_encoder
@@ -24,15 +26,18 @@ def create_unit(cursor, connection, payload: dict,user):
                 break
 
         # cursor.execute(...),[list] or (tuple) => both works
-        cursor.execute("INSERT INTO unit (id, company_id, name) VALUES (%s, %s, %s)",[unit_id, user["company_id"], payload["name"]])   
+        cursor.execute("INSERT INTO unit (id, company_id, name,created_by,updated_at,updated_by) VALUES (%s, %s, %s,%s,now(),%s)",[unit_id, user["company_id"], payload["name"],user["id"],user["id"]])
         connection.commit()
         logger.info(f"Unit created with id: {unit_id} for company_id: {user['company_id']}")
+        
+        #Audit logs
+        create_audit_log(cursor,connection,action="UNIT_CREATED",entity_id=unit_id,user_id=user["id"])
 
         return api_response(201, "Unit created successfully", data={"unit_id": unit_id})
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error creating unit for company_id: {user['company_id']}, error: {str(e)}")
+        log_exception(e,f"Error creating unit for company_id: {user['company_id']}")
         return HTTPException(500, "Failed to create unit")
     
 def get_units(cursor):
@@ -44,45 +49,87 @@ def get_units(cursor):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to fetch units with error: {str(e)}")
+        log_exception(e,f"Failed to fetch units with error")
         raise HTTPException(500, "Internal server error")
 
-def archive_unit(cursor,connection,unit_id,user):
+
+def get_unit_by_id(cursor,unit_id:str):
     try:
-        cursor.execute("UPDATE unit SET is_archived=1 WHERE id=%s AND company_id=%s",(unit_id, user["company_id"]))
-        connection.commit()
-        logger.info(f"Unit archived with id: {unit_id} for company_id: {user['company_id']}")
+        # Get unit
+        cursor.execute("SELECT id, name, is_archived FROM unit WHERE id = %s",(unit_id,))
+        unit = cursor.fetchone()
+
+        if not unit:
+            raise HTTPException(status_code=404, detail="Unit not found")
+
+        # Get docs
+        cursor.execute("SELECT id, title,type FROM document WHERE unit_id = %s",(unit_id,))
+        docs = cursor.fetchall()
+
+
+        return {
+        "id": unit["id"],
+        "name": unit["name"],
+        "Documents": docs
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        log_exception(e,f"failed to fetch Unit | {unit_id}")
+        raise HTTPException(status_code=500, detail="Failed to fetch Unit: | {unit_id}")
+
+
+def archive_unit(cursor,connection,unit_id,user,cascade):
+    """
+           Requirement:
+           - On Cascade all child docs should also be archived
+           - On Non Cascade only unit should be archived
+           - Only ADMIN can archive units
+           """
+    try:
+        cursor.execute("UPDATE unit SET is_archived=1,updated_at=now(),updated_by=%s WHERE id=%s AND company_id=%s",(user["id"],unit_id, user["company_id"]))
 
         if cursor.rowcount == 0:
             logger.warning("Unit not found or already archived")
             raise HTTPException(404, "Unit not found or already archived")
+        if cascade:
+            cursor.execute("update document set is_archived=1 ,updated_at=now(),updated_by=%s where unit_id=%s",(user["id"],unit_id))
+        connection.commit()
+        logger.info(f"Unit archived with id: {unit_id} for company_id: {user['company_id']}")
+
+        # Audit logs
+        create_audit_log(cursor, connection, action="UNIT_ARCHIVED", entity_id=unit_id, user_id=user["id"])
+        
         return api_response(200, "Unit archived")
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error archiving unit_id: {unit_id} for company_id: {user['company_id']}, error: {str(e)}")
+        log_exception(e,f"Error archiving unit_id: {unit_id} for company_id: {user['company_id']}")
         raise HTTPException(500, "Internal server error")
 
 
 def unarchive_unit(cursor,connection,unit_id,user):
     try:
         cursor.execute(
-            "UPDATE unit SET is_archived=0 WHERE id=%s AND company_id=%s",(unit_id, user["company_id"]))
+            "UPDATE unit SET is_archived=0,updated_at=now(),updated_by=%s WHERE id=%s AND company_id=%s",(user["id"],unit_id, user["company_id"]))
         connection.commit()
         logger.info(f"Unit unarchived with id: {unit_id} for company_id: {user['company_id']}")
 
         if cursor.rowcount == 0:
             logger.warning(f"Unarchive failed, unit_id: {unit_id} not found for company_id: {user['company_id']}")  
-            raise HTTPException(404, "Unit not found")
+            raise HTTPException(404, "Unit Not Found!!")
 
+        #Audit logs
+        create_audit_log(cursor,connection,action="UNIT_UNARCHIVED",entity_id=unit_id,user_id=user["id"])
         return api_response(200, "Unit unarchived") 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error unarchiving unit_id: {unit_id} for company_id: {user['company_id']}, error: {str(e)}")
+        log_exception(e,f"Error unarchiving unit_id: {unit_id} for company_id: {user['company_id']}")
         raise HTTPException(500, "Internal server error")
     
-def update_unit(cursor,connection,unit_id,payload):
+def update_unit(cursor,connection,unit_id,payload,user):
     try:
         cursor.execute("SELECT id,is_archived FROM unit WHERE id=%s", (unit_id,))
         existing_unit = cursor.fetchone()
@@ -98,12 +145,66 @@ def update_unit(cursor,connection,unit_id,payload):
             name_conflict = cursor.fetchone()
             if name_conflict:
                 raise HTTPException(status_code=409, detail="unit name already taken")
-            cursor.execute("UPDATE unit SET name=%s WHERE id=%s", (payload["name"], unit_id))
+            cursor.execute("UPDATE unit SET name=%s,updated_at=now(),updated_by=%s WHERE id=%s", (payload["name"],user["id"], unit_id))
         connection.commit()
-        
+
         logger.info(f"unit updated with id={unit_id}")
+        
+        #Audit logs
+        create_audit_log(cursor,connection,action="UNIT_UPDATED",entity_id=unit_id,user_id=user["id"])
+        
         return api_response(status_code=201,message="unit updated")
+    
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(500,"Failed to update unit name")    
+        log_exception(e,f"Failed to update unit name")
+        raise HTTPException(500,"Failed to update unit name")
+
+def delete_unit(cursor,connection,unit_id,user,confirm: bool = False):
+    try:
+        cursor.execute("SELECT count(*) as total_unit FROM unit WHERE company_id=%s", (user["company_id"],))
+        total_unit = cursor.fetchone()
+
+        # Get company_id first
+        if total_unit["total_unit"] <= 1:
+            cursor.execute("SELECT company_id FROM unit WHERE id=%s", (unit_id,))
+            row = cursor.fetchone()
+
+            if not row:
+                raise HTTPException(status_code=404, detail="Unit not found")
+
+            company_id = row["company_id"]
+
+        if not confirm:
+            if total_unit["total_unit"] <= 1:
+                return api_response(
+                    200,
+                    f"Deleting this last unit will  also delete unit's company . Please confirm.",
+                    {"confirm_required": True}
+                )
+            return api_response(
+                200,
+                "Deleting this unit will remove all related data. Please confirm.",
+                {"confirm_required": True}
+            )
+
+        cursor.execute("DELETE FROM unit WHERE id=%s ",(unit_id,))
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Unit not found || error during deletion")
+
+        if total_unit["total_unit"] <= 1:
+            delete_company(cursor, connection, company_id,confirm)
+        connection.commit()
+
+        # Audit logs
+        create_audit_log(cursor, connection, action="UNIT_PERMANENTLY_DELETED", entity_id=unit_id, user_id=user["id"])
+        logger.info(f"unit deleted successfully with id={unit_id}")
+        return api_response(200, "unit deleted successfully", unit_id)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        log_exception(e, f"Failed to delete unit")
+        connection.rollback()
+        raise HTTPException(500, "Failed to delete unit")

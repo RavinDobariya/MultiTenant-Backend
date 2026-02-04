@@ -1,9 +1,9 @@
 import uuid
-from app.utils.logger import logger
+from app.utils.logger import logger,log_exception
 from fastapi import HTTPException
 from app.utils.response_handler import api_response
 
-def create_audit_log(cursor, connection, action: str, entity_id: str, user_id: str):
+def create_audit_log(cursor, connection, action: str, entity_id: str, user_id: str,is_delete=False):
     """
     Create audit logs synchronously during request (PDF requirement).
     Logs who did what action on which entity.
@@ -23,10 +23,10 @@ def create_audit_log(cursor, connection, action: str, entity_id: str, user_id: s
         
         cursor.execute(
             """
-            INSERT INTO audit_log (id, action, entity_id, user_id)
-            VALUES (%s, %s, %s, %s)
+            INSERT INTO audit_log (id, action, entity_id, user_id,is_delete)
+            VALUES (%s, %s, %s, %s,%s)
             """,
-            (audit_id, action, entity_id, user_id),
+            (audit_id, action, entity_id, user_id,is_delete),
         )
         connection.commit()
         result = cursor.fetchone()
@@ -40,8 +40,6 @@ def create_audit_log(cursor, connection, action: str, entity_id: str, user_id: s
     except Exception as e:
         logger.error(f"Audit log failed: {e}")
         raise HTTPException(500,detail="Failed to create audit logs")
-
-
 
 def list_audit_logs_service(
     cursor,
@@ -101,3 +99,26 @@ def list_audit_logs_service(
     except Exception as e:
         logger.error(f"Failed to fetch audit logs: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch audit logs")
+    
+def get_user_audit_log(cursor,user):
+    try:
+        # Get userid
+        user_id= user["id"]
+        
+        cursor.execute("SELECT id, action, entity_id, created_at FROM audit_log WHERE user_id = %s ORDER BY created_at DESC",(user_id,))
+        audit_log = cursor.fetchall()
+
+        if not audit_log:
+            raise HTTPException(status_code=404, detail="no audits founds")
+
+        return {
+        "id": user_id,
+        "email": user["email"],
+        "Audit_logs": audit_log
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        log_exception(e,f"failed to fetch user's audit logs | {user_id}")
+        raise HTTPException(status_code=500, detail="Failed to fetch company: | {user_id}")
