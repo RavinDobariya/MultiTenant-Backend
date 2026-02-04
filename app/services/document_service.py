@@ -244,9 +244,9 @@ async def update_document(cursor, connection, payload: dict, user: dict, documen
             return api_response(201, "Document updated",document_id)
 
         if action=="ARCHIVE":
-            return archive_document(cursor,connection,user,document_id)
+            return await archive_document(cursor,connection,user,document_id)
         if action=="RESTORE":
-            return approve_document(cursor,connection,user,document_id)
+            return await approve_document(cursor,connection,user,document_id)
 
     except HTTPException:
         raise
