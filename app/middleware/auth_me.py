@@ -40,6 +40,11 @@ def auth_role(required_roles: list[str] | str):
 
 
 """
+
+PUBLIC_PATHS = ["/login","/signup"]     # For PUBLIC_PATHS => middleware code just pass api call request to call_next, it does not execute any logic code
+
+#If two middleware M1,M2 define order then request goes like M1 -> M2 -> call_next/API call => response come from API -> M2 -> M1
+
 @app.middleware("http")
 async def auth_middleware(request: Request, call_next):
 
