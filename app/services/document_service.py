@@ -12,6 +12,9 @@ from fastapi.responses import StreamingResponse
 from app.utils.cache import cache_set, cache_get, cache_delete,cache_delete_pattern
 from app.utils.cache_keys import create_cache_key,create_list_cache_key
 
+from app.task.audit_task import create_audit_log_task
+
+
 ALLOWED_TYPES = {
     "application/pdf",
     "application/vnd.ms-excel",
@@ -70,7 +73,7 @@ async def create_document(cursor, connection, payload, user: dict):
         logger.info(f"Document uploaded doc_id={doc_id} by user_id={user['id']}")
 
         #Audit logs
-        create_audit_log(cursor,connection,action="Document Created",entity_id=doc_id,user_id=user["id"])
+        create_audit_log_task.delay(cursor,connection,action="Document Created",entity_id=doc_id,user_id=user["id"])
 
         return api_response(201, "Document created", doc_id)
 
@@ -263,7 +266,7 @@ async def update_document(cursor, connection, payload: dict, user: dict, documen
             logger.info(f"Document updated doc_id={document_id} by user_id={user['id']}")
 
             #Audit logs
-            create_audit_log(cursor,connection,action="DOCUMENT_UPDATED",entity_id=document_id,user_id=user["id"])
+            create_audit_log_task.delay(cursor,connection,action="DOCUMENT_UPDATED",entity_id=document_id,user_id=user["id"])
             return api_response(201, "Document updated",document_id)
 
         if action=="ARCHIVE":
@@ -311,7 +314,7 @@ async def approve_document(cursor, connection, user: dict, document_id: str):
         logger.info(f"Document approved doc_id={document_id} by user_id={user['id']}")
 
         #Audit logs
-        create_audit_log(cursor,connection,action="Document Approved",entity_id=document_id,user_id=user["id"])
+        create_audit_log_task.delay(cursor,connection,action="Document Approved",entity_id=document_id,user_id=user["id"])
         return api_response(200, "DOCUMENT_RESTORED",f"Doc approved: {document_id}, Doc approved by user: {user['id']}")
 
     except HTTPException:
@@ -355,7 +358,7 @@ async def archive_document(cursor, connection, user: dict, document_id: str):
         logger.info(f"Document archived doc_id={document_id} by user_id={user['id']}")
 
         #Audit logs
-        create_audit_log(cursor,connection,action="DOCUMENT_ARCHIVED",entity_id=document_id,user_id=user["id"])
+        create_audit_log_task.delay(cursor,connection,action="DOCUMENT_ARCHIVED",entity_id=document_id,user_id=user["id"])
 
         return api_response(201, "Document archived",f"Doc archived: {document_id}, Doc archived by user: {user['id']}")
 
@@ -407,7 +410,7 @@ async def upload_document(document_id,file: UploadFile,cursor,connection,user):
         connection.commit()
 
         #Audit logs
-        create_audit_log(cursor,connection,action="DOCUMENT_UPLOADED",entity_id=document_id,user_id=user["id"])
+        create_audit_log_task.delay(cursor,connection,action="DOCUMENT_UPLOADED",entity_id=document_id,user_id=user["id"])
 
         return api_response(201, "File uploaded successfully",file_url)
     
@@ -444,7 +447,7 @@ async def delete_document(cursor, connection, user: dict, document_id: str,confi
         connection.commit()
 
         # Audit logs
-        create_audit_log(cursor, connection, action="Document Deleted", entity_id=document_id, user_id=user["id"],is_delete=True)
+        create_audit_log_task.delay(cursor, connection, action="Document Deleted", entity_id=document_id, user_id=user["id"],is_delete=True)
         return api_response(200, "Document deleted successfully", document_id)
 
     except HTTPException:

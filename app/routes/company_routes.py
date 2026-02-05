@@ -1,11 +1,13 @@
 from fastapi import APIRouter, Depends
 from app.database.cursor_config import get_db
-from app.services.company_service import create_company, list_companies, update_company, get_company_by_id, \
-    delete_company
+from app.services.company_service import create_company, list_companies, update_company, get_company_by_id,delete_company
 from app.schemas.company_schema import CompanyCreate, CompanyUpdate
 from app.middleware.auth_me import auth_role
 from app.utils.logger import logger
 from fastapi.encoders import jsonable_encoder
+
+from app.celery_app import celery_app
+from celery.result import AsyncResult
 
 router = APIRouter(prefix="/companies", tags=["Companies"])
     
@@ -43,3 +45,14 @@ def delete_unite_route(confirm: bool = False, user=Depends(auth_role(["ADMIN"]))
     cursor, connection = db
     logger.info(f"Delete company request by admin user_id={user['id']}")
     return delete_company(cursor, connection, confirm,user)
+
+@router.get("/task/{task_id}")
+def get_task_status(task_id:str):
+
+    result = AsyncResult(task_id,app=celery_app)        #Here app=celery_app is not mandatory
+
+    return {
+        "task_id": task_id,
+        "status": result.status,           # PENDING / STARTED / SUCCESS / FAILURE
+        "result": result.result            # Output or Error
+    }

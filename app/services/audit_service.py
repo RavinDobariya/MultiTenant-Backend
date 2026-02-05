@@ -2,13 +2,17 @@ import uuid
 from app.utils.logger import logger,log_exception
 from fastapi import HTTPException
 from app.utils.response_handler import api_response
+from app.database.cursor_config import get_db,get_connection
+from fastapi.params import Depends
 
-def create_audit_log(cursor, connection, action: str, entity_id: str, user_id: str,is_delete=False):
+def create_audit_log( action: str, entity_id: str, user_id: str,is_delete=False,db=Depends(get_db)):
     """
     Create audit logs synchronously during request (PDF requirement).
     Logs who did what action on which entity.
     """
     try:
+        connection = get_connection()
+        cursor = connection.cursor(dictionary=True)
         #audit_id = uuid.uuid4()            not best Bcuz it gives uuid <object> but works => string covertion automatically sometimes
         while True:
             audit_id = str(uuid.uuid4())
@@ -29,11 +33,11 @@ def create_audit_log(cursor, connection, action: str, entity_id: str, user_id: s
             (audit_id, action, entity_id, user_id,is_delete),
         )
         connection.commit()
-        result = cursor.fetchone()
+
 
         logger.info(f"Audit log created action={action} entity_id={entity_id} user_id={user_id}")
-        return api_response(status_code=201,message="Audit created",data=result)
-        
+        return {"status_code":"success","message":"Audit created"}
+
     
     except HTTPException:
         raise

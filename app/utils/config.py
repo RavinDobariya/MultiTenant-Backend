@@ -26,6 +26,9 @@ class Settings(BaseSettings):
     REDIS_URL: str
     DEFAULT_TTL: int
 
+    REDIS_BROKER_URL: str
+    REDIS_BACKEND_URL: str
+
     LOG_LEVEL: str = "INFO"
 
     class Config:

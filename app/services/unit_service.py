@@ -9,6 +9,8 @@ from fastapi.encoders import jsonable_encoder
 from app.utils.cache import cache_set, cache_get, cache_delete,cache_delete_pattern
 from app.utils.cache_keys import create_cache_key,create_list_cache_key
 
+from app.task.audit_task import create_audit_log_task
+
 async def create_unit(cursor, connection, payload: dict,user):
     try:
         #unique name checking
@@ -38,8 +40,8 @@ async def create_unit(cursor, connection, payload: dict,user):
         logger.info(f"Unit created with id: {unit_id} for company_id: {user['company_id']}")
         
         #Audit logs
-        create_audit_log(cursor,connection,action="UNIT_CREATED",entity_id=unit_id,user_id=user["id"])
-
+        task = create_audit_log_task.delay(action="UNIT_CREATED",entity_id=unit_id,user_id=user["id"])
+        print("\n\ntask id",task.id,"\n\n")
         return api_response(201, "Unit created successfully", data={"unit_id": unit_id})
     except HTTPException:
         raise
@@ -134,7 +136,7 @@ async def archive_unit(cursor,connection,unit_id,user,cascade):
         logger.info(f"Unit archived with id: {unit_id} for company_id: {user['company_id']}")
 
         # Audit logs
-        create_audit_log(cursor, connection, action="UNIT_ARCHIVED", entity_id=unit_id, user_id=user["id"])
+        create_audit_log_task.delay( action="UNIT_ARCHIVED", entity_id=unit_id, user_id=user["id"])
         
         return api_response(200, "Unit archived")
     except HTTPException:
@@ -162,7 +164,7 @@ async def unarchive_unit(cursor,connection,unit_id,user):
             raise HTTPException(404, "Unit Not Found!!")
 
         #Audit logs
-        create_audit_log(cursor,connection,action="UNIT_UNARCHIVED",entity_id=unit_id,user_id=user["id"])
+        create_audit_log_task.delay(action="UNIT_UNARCHIVED",entity_id=unit_id,user_id=user["id"])
         return api_response(200, "Unit unarchived") 
     except HTTPException:
         raise
@@ -198,7 +200,7 @@ async def update_unit(cursor,connection,unit_id,payload,user):
         logger.info(f"unit updated with id={unit_id}")
         
         #Audit logs
-        create_audit_log(cursor,connection,action="UNIT_UPDATED",entity_id=unit_id,user_id=user["id"])
+        create_audit_log_task.delay(action="UNIT_UPDATED",entity_id=unit_id,user_id=user["id"])
         
         return api_response(status_code=201,message="unit updated")
     
@@ -252,7 +254,7 @@ async def delete_unit(cursor,connection,unit_id,user,confirm: bool = False):
         connection.commit()
 
         # Audit logs
-        create_audit_log(cursor, connection, action="UNIT_PERMANENTLY_DELETED", entity_id=unit_id, user_id=user["id"])
+        create_audit_log_task.delay(action="UNIT_PERMANENTLY_DELETED", entity_id=unit_id, user_id=user["id"])
         logger.info(f"unit deleted successfully with id={unit_id}")
         return api_response(200, "unit deleted successfully", unit_id)
 
