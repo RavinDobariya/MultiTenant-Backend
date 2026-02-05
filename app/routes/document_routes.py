@@ -5,7 +5,7 @@ from app.database.cursor_config import get_db
 from app.middleware.auth_me import auth_role
 from app.utils.response_handler import api_response
 from app.schemas.document_schema import DocumentCreate, DocumentUpdate, Action,DownloadType
-from app.services.document_service import (create_document, list_documents, update_document, approve_document, archive_document,upload_document,delete_document,download_document)
+from app.services.document_service import (create_document, list_documents,get_document, update_document, approve_document, archive_document,upload_document,delete_document,download_document)
 from app.utils.logger import logger
 
 
@@ -49,6 +49,10 @@ async def get_documents(
     data = await list_documents(cursor, user, page, limit, unit_id, status, sort_by,sort_order,archived_docs,type_=type,)
     return api_response(200,"all docs fetched",data)
 
+@router.get("/{document_id}")
+async def get_doc(document_id: str,db=Depends(get_db),user=Depends(auth_role(["ADMIN", "EDITOR", "USER"]))):
+    cursor,connection = db
+    return await get_document(cursor,user,document_id)
 
 @router.patch("/{document_id}")
 async def update_doc(document_id: str, payload: DocumentUpdate,action:Action,db=Depends(get_db), user=Depends(auth_role(["ADMIN", "EDITOR"]))):
@@ -84,13 +88,13 @@ async def upload_doc(
     return file_url
 
 @router.get("/download")
-def download_doc(document_id:str | None =None,db=Depends(get_db),downloadType:DownloadType="PDF"):#user=Depends(auth_role(["ADMIN", "EDITOR","USER"]))
+async def download_doc(document_id:str | None =None,db=Depends(get_db),downloadType:DownloadType="PDF"):#user=Depends(auth_role(["ADMIN", "EDITOR","USER"]))
     cursor,connection =db
     user="user"
     return download_document(cursor,user,document_id,downloadType)
 
 @router.delete("/delete/{document_id}")
-def delete_doc(document_id: str, db=Depends(get_db), user=Depends(auth_role(["ADMIN"])),confirm:bool = False):
+async def delete_doc(document_id: str, db=Depends(get_db), user=Depends(auth_role(["ADMIN"])),confirm:bool = False):
 
     cursor, connection = db
     return delete_document(cursor, connection, user, document_id,confirm)

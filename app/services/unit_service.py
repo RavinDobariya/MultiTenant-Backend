@@ -6,7 +6,10 @@ import uuid
 from fastapi import HTTPException
 from fastapi.encoders import jsonable_encoder
 
-def create_unit(cursor, connection, payload: dict,user):
+from app.utils.cache import cache_set, cache_get, cache_delete,cache_delete_pattern
+from app.utils.cache_keys import create_cache_key,create_list_cache_key
+
+async def create_unit(cursor, connection, payload: dict,user):
     try:
         #unique name checking
         cursor.execute("SELECT 1 FROM unit WHERE name=%s LIMIT 1",(payload["name"],))
@@ -28,6 +31,10 @@ def create_unit(cursor, connection, payload: dict,user):
         # cursor.execute(...),[list] or (tuple) => both works
         cursor.execute("INSERT INTO unit (id, company_id, name,created_by,updated_at,updated_by) VALUES (%s, %s, %s,%s,now(),%s)",[unit_id, user["company_id"], payload["name"],user["id"],user["id"]])
         connection.commit()
+
+        # No need to cache single unit key on unit creation
+        await cache_delete_pattern("key_unit*")
+
         logger.info(f"Unit created with id: {unit_id} for company_id: {user['company_id']}")
         
         #Audit logs
@@ -40,11 +47,24 @@ def create_unit(cursor, connection, payload: dict,user):
         log_exception(e,f"Error creating unit for company_id: {user['company_id']}")
         return HTTPException(500, "Failed to create unit")
     
-def get_units(cursor):
+async def get_units(cursor):
     try:
+        # create cache key
+        cache_key = create_cache_key("units","list")
+
+        #check cache
+        cached_data = await cache_get(cache_key)
+
+        if cached_data:
+            return cached_data
+
         cursor.execute("SELECT * FROM unit")         #fetch all units
         units = cursor.fetchall()
         result = jsonable_encoder({"data": units})
+
+        #save to cache
+        await cache_set(cache_key,result)             #result = units conflict
+
         return api_response(status_code=200,message="Units fetched",data=result)
     except HTTPException:
         raise
@@ -53,8 +73,16 @@ def get_units(cursor):
         raise HTTPException(500, "Internal server error")
 
 
-def get_unit_by_id(cursor,unit_id:str):
+async def get_unit_by_id(cursor,unit_id:str):
     try:
+
+        # create cache key
+        cache_key = create_cache_key("unit", unit_id)
+
+        cached_data = await cache_get(cache_key)
+        if cached_data:
+            return cached_data
+
         # Get unit
         cursor.execute("SELECT id, name, is_archived FROM unit WHERE id = %s",(unit_id,))
         unit = cursor.fetchone()
@@ -66,7 +94,7 @@ def get_unit_by_id(cursor,unit_id:str):
         cursor.execute("SELECT id, title,type FROM document WHERE unit_id = %s",(unit_id,))
         docs = cursor.fetchall()
 
-
+        await cache_set(cache_key,unit)
         return {
         "id": unit["id"],
         "name": unit["name"],
@@ -80,7 +108,7 @@ def get_unit_by_id(cursor,unit_id:str):
         raise HTTPException(status_code=500, detail="Failed to fetch Unit: | {unit_id}")
 
 
-def archive_unit(cursor,connection,unit_id,user,cascade):
+async def archive_unit(cursor,connection,unit_id,user,cascade):
     """
            Requirement:
            - On Cascade all child docs should also be archived
@@ -88,6 +116,13 @@ def archive_unit(cursor,connection,unit_id,user,cascade):
            - Only ADMIN can archive units
            """
     try:
+
+        # create cache key
+        cache_key = create_cache_key("unit", unit_id)
+
+        await cache_delete(cache_key)
+        await cache_delete_pattern("key_unit*")
+
         cursor.execute("UPDATE unit SET is_archived=1,updated_at=now(),updated_by=%s WHERE id=%s AND company_id=%s",(user["id"],unit_id, user["company_id"]))
 
         if cursor.rowcount == 0:
@@ -109,8 +144,14 @@ def archive_unit(cursor,connection,unit_id,user,cascade):
         raise HTTPException(500, "Internal server error")
 
 
-def unarchive_unit(cursor,connection,unit_id,user):
+async def unarchive_unit(cursor,connection,unit_id,user):
     try:
+        # create cache key
+        cache_key = create_cache_key("unit", unit_id)
+
+        await cache_delete(cache_key)
+        await cache_delete_pattern("key_unit*")
+
         cursor.execute(
             "UPDATE unit SET is_archived=0,updated_at=now(),updated_by=%s WHERE id=%s AND company_id=%s",(user["id"],unit_id, user["company_id"]))
         connection.commit()
@@ -129,8 +170,14 @@ def unarchive_unit(cursor,connection,unit_id,user):
         log_exception(e,f"Error unarchiving unit_id: {unit_id} for company_id: {user['company_id']}")
         raise HTTPException(500, "Internal server error")
     
-def update_unit(cursor,connection,unit_id,payload,user):
+async def update_unit(cursor,connection,unit_id,payload,user):
     try:
+        # create cache key
+        cache_key = create_cache_key("unit", unit_id)
+
+        await cache_delete(cache_key)
+        await cache_delete_pattern("key_unit*")
+
         cursor.execute("SELECT id,is_archived FROM unit WHERE id=%s", (unit_id,))
         existing_unit = cursor.fetchone()
         
@@ -161,8 +208,15 @@ def update_unit(cursor,connection,unit_id,payload,user):
         log_exception(e,f"Failed to update unit name")
         raise HTTPException(500,"Failed to update unit name")
 
-def delete_unit(cursor,connection,unit_id,user,confirm: bool = False):
+async def delete_unit(cursor,connection,unit_id,user,confirm: bool = False):
     try:
+        if confirm:
+            # create cache key
+            cache_key = create_cache_key("unit", unit_id)
+
+            await cache_delete(cache_key)
+            await cache_delete_pattern("key_unit*")
+
         cursor.execute("SELECT count(*) as total_unit FROM unit WHERE company_id=%s", (user["company_id"],))
         total_unit = cursor.fetchone()
 

@@ -93,8 +93,10 @@ async def list_documents(cursor, user: dict, page: int, limit: int, unit_id=None
             filter_query["status"] = status
         if  type_:
             filter_query["type"] = type_
+        if archived_docs:
+            filter_query["archived_docs"] = archived_docs
         #create cache key
-        cache_key = create_list_cache_key("document",page,limit,filter_query)
+        cache_key = create_list_cache_key("document",filter_query)
 
         #check cache
         cached_data = await cache_get(cache_key)
@@ -106,7 +108,6 @@ async def list_documents(cursor, user: dict, page: int, limit: int, unit_id=None
         offset = (page - 1) * limit         
         #page=1 => offset=0     (skip zero records, get first 10 records)
         #page=3 => offset=20    (skip first 20 records, get next 10 records)
-        print(archived_docs)
         if user["role"].upper()=="ADMIN":
             value = archived_docs
         else :
@@ -184,6 +185,28 @@ async def list_documents(cursor, user: dict, page: int, limit: int, unit_id=None
         log_exception(e,f"failed to list document")
         raise HTTPException(status_code=500, detail="Failed to fetch documents")
 
+async def get_document(cursor, user: dict, document_id: str):
+    #Its id = document_id AND it belongs to a unit that is inside the user’s company
+
+    # create cache key
+    cache_key = create_cache_key("document",document_id)
+
+    # check cache
+    cached_data = await cache_get(cache_key)
+
+    if cached_data:
+        return cached_data
+
+    cursor.execute("SELECT * FROM document WHERE id=%s AND unit_id IN (SELECT id FROM unit WHERE company_id=%s)",
+                   (document_id, user["company_id"]))
+    row = cursor.fetchone()
+
+    await cache_set(cache_key,row)
+
+    if not row:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    return row
 
 async def update_document(cursor, connection, payload: dict, user: dict, document_id: str,action:str="METADATA"):
     """
@@ -395,8 +418,11 @@ async def upload_document(document_id,file: UploadFile,cursor,connection,user):
         raise HTTPException(500,"Error while uploading file")
 
 
-def delete_document(cursor, connection, user: dict, document_id: str,confirm: bool = False):
+async def delete_document(cursor, connection, user: dict, document_id: str,confirm: bool = False):
     try:
+
+        await cache_delete_pattern("key_document*")
+
         if not confirm:
             cursor.execute("update document set is_delete=1 where id=%s",(document_id,))
             if cursor.rowcount == 0:
@@ -429,8 +455,13 @@ def delete_document(cursor, connection, user: dict, document_id: str,confirm: bo
         raise HTTPException(status_code=500, detail="Failed to delete document")
 
 
-def download_document(cursor,user,document_id,downloadType):
+async def download_document(cursor,user,document_id,downloadType):
     try:
+        # create cache key
+        cache_key = create_cache_key("document", document_id)
+
+        await cache_delete(cache_key)
+        await cache_delete_pattern("key_document*")
         if downloadType=="PDF":
             logger.info("user request for pdf")
             cursor.execute("SELECT id,file_url FROM document WHERE id=%s",(document_id,))

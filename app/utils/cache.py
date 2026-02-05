@@ -19,21 +19,22 @@ async def cache_get(key: str):
         data = await redis_client.get(key)
 
         if data:
-            logger.info(f"Redis => Cache hit: key={key}")
+            logger.info(f"\n\nRedis => Cache hit: key={key}\n")
             return json.loads(data)
-        logger.info(f"Redis => Cache miss: key={key}")
+        logger.info(f"\n\nRedis => Cache miss: key={key}\n")
         return None
 
     except Exception:       # If Redis fails → don't break app
         return None
 
                                      # ttl = DEFAULT_TTL => on cache expire thousand of requests will be made to DB => DB overload
-async def cache_set(key: str, value, ttl = random.randint(60, 120)):
+async def cache_set(key: str, value):
     """
     Save value in Redis with TTL
     """
     try:
         #print(key)                                         # Cannot convert datetime to JSON => so use default=str
+        ttl = random.randint(60, 120)
         data = json.dumps(value, default=str)               # If you find any object you don’t understand, convert it to string
         logger.info(f"Redis => Saving to cache: key={key}")
         await redis_client.set(key, data, ex=ttl)       #ex = Redis parameter expiry
