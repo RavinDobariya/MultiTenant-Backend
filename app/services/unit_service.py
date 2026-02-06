@@ -41,7 +41,7 @@ async def create_unit(cursor, connection, payload: dict,user):
         
         #Audit logs
         task = create_audit_log_task.delay(action="UNIT_CREATED",entity_id=unit_id,user_id=user["id"])
-        print("\n\ntask id",task.id,"\n\n")
+        print("\n\ntask id \n",task.id,"\n\n")
         return api_response(201, "Unit created successfully", data={"unit_id": unit_id})
     except HTTPException:
         raise
