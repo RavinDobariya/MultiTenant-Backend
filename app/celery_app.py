@@ -26,6 +26,7 @@ celery_app.conf.task_default_queue = "default"      #if not mentioned then goes 
 celery_app.autodiscover_tasks(["app.task.audit_task"])              #load tasks from audit_task.py
                                                                     #Cannot import tasks here because of circular dependency
 
+celery_app.conf.task_track_started = True           #Provide STARTED status when task starts running
 
 
 
