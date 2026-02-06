@@ -99,7 +99,7 @@ async def list_documents(cursor, user: dict, page: int, limit: int, unit_id=None
         if archived_docs:
             filter_query["archived_docs"] = archived_docs
         #create cache key
-        cache_key = create_list_cache_key("document",filter_query)
+        cache_key = create_list_cache_key("document",user["company_id"],filter_query)
 
         #check cache
         cached_data = await cache_get(cache_key)

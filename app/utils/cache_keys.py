@@ -10,12 +10,13 @@ def create_cache_key(
 
 def create_list_cache_key(
         resource: str,
+        company_id: str,
         filters:dict | None = None
     ) -> str:
         """
        List / filter / pagination cache key
        """
-        base = f"key_{resource}:list"
+        base = f"key_{resource}:{company_id}:list"
 
         if filters:
             for x in filters:               #No need to sort dictionary as latest python dict are ordered
