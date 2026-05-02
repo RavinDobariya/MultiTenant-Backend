@@ -5,6 +5,7 @@ from app.schemas.company_schema import CompanyCreate, CompanyUpdate
 from app.middleware.auth_me import auth_role
 from app.utils.logger import logger
 from fastapi.encoders import jsonable_encoder
+from app.utils.response_handler import api_response
 
 from app.celery_app import celery_app
 from celery.result import AsyncResult
@@ -20,18 +21,18 @@ def create_company_route(payload: CompanyCreate, db=Depends(get_db), user=Depend
 
 
 @router.get("")
-def list_companies_route(db=Depends(get_db),user=Depends(auth_role(["ADMIN", "EDITOR", "VIEWER"]))):
+def list_companies_route(db=Depends(get_db),user=Depends(auth_role(["ADMIN", "EDITOR", "USER"]))):
     cursor, connection = db
     data = list_companies(cursor)
     logger.info(f"List companies request by admin user_id={user['id']}")
-    return jsonable_encoder({"data": data})
+    return api_response(200, "Companies fetched", data=jsonable_encoder(data))
 
 @router.get("/get-your-company")
-def get_company_by_id_route(db=Depends(get_db),user=Depends(auth_role(["ADMIN", "EDITOR", "VIEWER"]))):
+def get_company_by_id_route(db=Depends(get_db),user=Depends(auth_role(["ADMIN", "EDITOR", "USER"]))):
     cursor,connection = db
     data = get_company_by_id(cursor,user)
     logger.info(f"Get company by id request by admin user_id={user['id']}")
-    return jsonable_encoder({"data": data})
+    return api_response(200, "Company fetched", data=jsonable_encoder(data))
     
 @router.patch("/update")                                                                                  #########
 def update_company_route(payload: CompanyUpdate,db=Depends(get_db),user=Depends(auth_role("ADMIN")),):

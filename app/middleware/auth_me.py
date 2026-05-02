@@ -31,11 +31,18 @@ def get_current_user(creds: HTTPAuthorizationCredentials = Depends(bearer_scheme
     return user                 # userid, email, role, company_id
 
 def auth_role(required_roles: list[str] | str):
+    allowed_roles = (
+        {required_roles.upper()}
+        if isinstance(required_roles, str)
+        else {role.upper() for role in required_roles}
+    )
+
     def role_checker(user=Depends(get_current_user)):
         role = user["role"].upper()
-        if role not in required_roles:
+        if role not in allowed_roles:
             raise HTTPException(403, "permissions denied")
         return user
+
     return role_checker
 
 

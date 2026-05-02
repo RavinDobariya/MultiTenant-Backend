@@ -6,6 +6,7 @@ from app.middleware.auth_me import auth_role
 from app.services.audit_service import list_audit_logs_service,create_audit_log,get_user_audit_log
 from app.utils.logger import logger
 from app.schemas.audit_schema import AuditCreate
+from app.utils.response_handler import api_response
 router = APIRouter(prefix="/audit-logs", tags=["Audit Logs"])
 
 
@@ -32,14 +33,14 @@ def list_audit_logs(
     )
 
     logger.info(f"Audit logs fetched by admin user_id={user['id']}")
-    return jsonable_encoder(result)
+    return api_response(200, "Audit logs fetched", data=jsonable_encoder(result))
 
 
 @router.get("/user-audits")
-def get_user_audit_log_route(db=Depends(get_db),user=Depends(auth_role(["ADMIN", "EDITOR", "VIEWER"]))):
+def get_user_audit_log_route(db=Depends(get_db),user=Depends(auth_role(["ADMIN", "EDITOR", "USER"]))):
     cursor,connection = db
     data = get_user_audit_log(cursor,user)
-    return jsonable_encoder({"data": data})
+    return api_response(200, "User audit logs fetched", data=jsonable_encoder(data))
 
 
 @router.post("/create")

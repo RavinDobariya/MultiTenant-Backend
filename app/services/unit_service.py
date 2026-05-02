@@ -47,7 +47,7 @@ async def create_unit(cursor, connection, payload: dict,user):
         raise
     except Exception as e:
         log_exception(e,f"Error creating unit for company_id: {user['company_id']}")
-        return HTTPException(500, "Failed to create unit")
+        raise HTTPException(500, "Failed to create unit")
     
 async def get_units(cursor):
     try:
@@ -58,11 +58,11 @@ async def get_units(cursor):
         cached_data = await cache_get(cache_key)
 
         if cached_data:
-            return cached_data
+            return api_response(status_code=200,message="Units fetched",data=cached_data)
 
         cursor.execute("SELECT * FROM unit")         #fetch all units
         units = cursor.fetchall()
-        result = jsonable_encoder({"data": units})
+        result = jsonable_encoder(units)
 
         #save to cache
         await cache_set(cache_key,result)             #result = units conflict
@@ -222,15 +222,8 @@ async def delete_unit(cursor,connection,unit_id,user,confirm: bool = False):
         cursor.execute("SELECT count(*) as total_unit FROM unit WHERE company_id=%s", (user["company_id"],))
         total_unit = cursor.fetchone()
 
-        # Get company_id first
-        if total_unit["total_unit"] <= 1:
-            cursor.execute("SELECT company_id FROM unit WHERE id=%s", (unit_id,))
-            row = cursor.fetchone()
-
-            if not row:
-                raise HTTPException(status_code=404, detail="Unit not found")
-
-            company_id = row["company_id"]
+        if total_unit["total_unit"] <= 0:
+            raise HTTPException(status_code=404, detail="Unit not found")
 
         if not confirm:
             if total_unit["total_unit"] <= 1:
@@ -250,7 +243,8 @@ async def delete_unit(cursor,connection,unit_id,user,confirm: bool = False):
             raise HTTPException(status_code=404, detail="Unit not found || error during deletion")
 
         if total_unit["total_unit"] <= 1:
-            delete_company(cursor, connection, company_id,confirm)
+            # Deleting the last unit should also remove the parent company for this user's tenant.
+            delete_company(cursor, connection, True, user)
         connection.commit()
 
         # Audit logs

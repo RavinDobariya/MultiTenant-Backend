@@ -73,7 +73,11 @@ async def create_document(cursor, connection, payload, user: dict):
         logger.info(f"Document uploaded doc_id={doc_id} by user_id={user['id']}")
 
         #Audit logs
-        create_audit_log_task.delay(cursor,connection,action="Document Created",entity_id=doc_id,user_id=user["id"])
+        create_audit_log_task.delay(
+            action="Document Created",
+            entity_id=doc_id,
+            user_id=user["id"],
+        )
 
         return api_response(201, "Document created", doc_id)
 
@@ -105,7 +109,7 @@ async def list_documents(cursor, user: dict, page: int, limit: int, unit_id=None
         cached_data = await cache_get(cache_key)
 
         if cached_data:
-            return cached_data
+            return jsonable_encoder(cached_data)
 
 
         offset = (page - 1) * limit         
@@ -198,18 +202,17 @@ async def get_document(cursor, user: dict, document_id: str):
     cached_data = await cache_get(cache_key)
 
     if cached_data:
-        return cached_data
+        return api_response(200, "Document fetched", jsonable_encoder(cached_data))
 
     cursor.execute("SELECT * FROM document WHERE id=%s AND unit_id IN (SELECT id FROM unit WHERE company_id=%s)",
                    (document_id, user["company_id"]))
     row = cursor.fetchone()
 
-    await cache_set(cache_key,row)
-
     if not row:
         raise HTTPException(status_code=404, detail="Document not found")
 
-    return row
+    await cache_set(cache_key,row)
+    return api_response(200, "Document fetched", jsonable_encoder(row))
 
 async def update_document(cursor, connection, payload: dict, user: dict, document_id: str,action:str="METADATA"):
     """
@@ -266,7 +269,11 @@ async def update_document(cursor, connection, payload: dict, user: dict, documen
             logger.info(f"Document updated doc_id={document_id} by user_id={user['id']}")
 
             #Audit logs
-            create_audit_log_task.delay(cursor,connection,action="DOCUMENT_UPDATED",entity_id=document_id,user_id=user["id"])
+            create_audit_log_task.delay(
+                action="DOCUMENT_UPDATED",
+                entity_id=document_id,
+                user_id=user["id"],
+            )
             return api_response(201, "Document updated",document_id)
 
         if action=="ARCHIVE":
@@ -314,7 +321,11 @@ async def approve_document(cursor, connection, user: dict, document_id: str):
         logger.info(f"Document approved doc_id={document_id} by user_id={user['id']}")
 
         #Audit logs
-        create_audit_log_task.delay(cursor,connection,action="Document Approved",entity_id=document_id,user_id=user["id"])
+        create_audit_log_task.delay(
+            action="Document Approved",
+            entity_id=document_id,
+            user_id=user["id"],
+        )
         return api_response(200, "DOCUMENT_RESTORED",f"Doc approved: {document_id}, Doc approved by user: {user['id']}")
 
     except HTTPException:
@@ -358,7 +369,11 @@ async def archive_document(cursor, connection, user: dict, document_id: str):
         logger.info(f"Document archived doc_id={document_id} by user_id={user['id']}")
 
         #Audit logs
-        create_audit_log_task.delay(cursor,connection,action="DOCUMENT_ARCHIVED",entity_id=document_id,user_id=user["id"])
+        create_audit_log_task.delay(
+            action="DOCUMENT_ARCHIVED",
+            entity_id=document_id,
+            user_id=user["id"],
+        )
 
         return api_response(201, "Document archived",f"Doc archived: {document_id}, Doc archived by user: {user['id']}")
 
@@ -410,7 +425,11 @@ async def upload_document(document_id,file: UploadFile,cursor,connection,user):
         connection.commit()
 
         #Audit logs
-        create_audit_log_task.delay(cursor,connection,action="DOCUMENT_UPLOADED",entity_id=document_id,user_id=user["id"])
+        create_audit_log_task.delay(
+            action="DOCUMENT_UPLOADED",
+            entity_id=document_id,
+            user_id=user["id"],
+        )
 
         return api_response(201, "File uploaded successfully",file_url)
     
@@ -434,7 +453,12 @@ async def delete_document(cursor, connection, user: dict, document_id: str,confi
             cursor.execute("update audit_log set is_delete=1 where entity_id=%s",(document_id,))
 
             connection.commit()
-            create_audit_log(cursor, connection, action="DOCUMENT_AUDIT_SOFT_DELETED", entity_id=document_id, user_id=user["id"],is_delete=True)
+            create_audit_log(
+                action="DOCUMENT_AUDIT_SOFT_DELETED",
+                entity_id=document_id,
+                user_id=user["id"],
+                is_delete=True,
+            )
             return api_response(200, "Document and related audits soft deleted ", document_id)
             """return api_response(
                 200,
@@ -447,7 +471,12 @@ async def delete_document(cursor, connection, user: dict, document_id: str,confi
         connection.commit()
 
         # Audit logs
-        create_audit_log_task.delay(cursor, connection, action="Document Deleted", entity_id=document_id, user_id=user["id"],is_delete=True)
+        create_audit_log_task.delay(
+            action="Document Deleted",
+            entity_id=document_id,
+            user_id=user["id"],
+            is_delete=True,
+        )
         return api_response(200, "Document deleted successfully", document_id)
 
     except HTTPException:
@@ -460,6 +489,9 @@ async def delete_document(cursor, connection, user: dict, document_id: str,confi
 
 async def download_document(cursor,user,document_id,downloadType):
     try:
+        if not document_id:
+            raise HTTPException(status_code=400, detail="document_id is required")
+
         # create cache key
         cache_key = create_cache_key("document", document_id)
 
@@ -467,7 +499,15 @@ async def download_document(cursor,user,document_id,downloadType):
         await cache_delete_pattern("key_document*")
         if downloadType=="PDF":
             logger.info("user request for pdf")
-            cursor.execute("SELECT id,file_url FROM document WHERE id=%s",(document_id,))
+            cursor.execute(
+                """
+                SELECT d.id, d.file_url
+                FROM document d
+                JOIN unit u ON u.id = d.unit_id
+                WHERE d.id=%s AND u.company_id=%s
+                """,
+                (document_id, user["company_id"]),
+            )
             document = cursor.fetchone()
             if not document:
                 raise HTTPException(status_code=404, detail="document not found!!")
@@ -475,7 +515,7 @@ async def download_document(cursor,user,document_id,downloadType):
             file_url = document.get("file_url")
             if not file_url:
                 raise HTTPException(status_code=404, detail="file_url not found!!")
-            logger.info(f"Document downloading doc_id={document_id} by user_id={user}")           #inline => open in browser #attachment => download file
+            logger.info(f"Document downloading doc_id={document_id} by user_id={user['id']}")           #inline => open in browser #attachment => download file
             return StreamingResponse(file_streamer(file_url), media_type="application/pdf",headers={"Content-Disposition":"inline; filename=doc.pdf"})
 
         if downloadType=="AUDIO":

@@ -6,10 +6,11 @@ from app.schemas.unit_schema import UnitCreateRequest
 from fastapi.encoders import jsonable_encoder
 
 from app.utils.logger import logger
+from app.utils.response_handler import api_response
 
-router = APIRouter(tags=["Units"]) 
+router = APIRouter(prefix="/units", tags=["Units"]) 
 
-@router.post("/units")
+@router.post("")
 async def create_unit_route(payload: UnitCreateRequest, user=Depends(auth_role(["ADMIN","EDITOR"])), db=Depends(get_db)):
         cursor, connection = db
         logger.info(f"Attempting to create unit for company_id: {user['company_id']}")
@@ -18,7 +19,7 @@ async def create_unit_route(payload: UnitCreateRequest, user=Depends(auth_role([
 
 
 
-@router.get("/units")
+@router.get("")
 async def get_units_routes(db=Depends(get_db),user=Depends(auth_role(["ADMIN","EDITOR","USER"]))):
         logger.info("Fetching all units at /units endpoint")
         cursor, connection = db
@@ -26,10 +27,10 @@ async def get_units_routes(db=Depends(get_db),user=Depends(auth_role(["ADMIN","E
         
 
 @router.get("/{unit_id}")
-async def get_unit_by_id_route(unit_id: str,db=Depends(get_db),user=Depends(auth_role(["ADMIN", "EDITOR", "VIEWER"]))):
+async def get_unit_by_id_route(unit_id: str,db=Depends(get_db),user=Depends(auth_role(["ADMIN", "EDITOR", "USER"]))):
     cursor,connection = db
     data = await get_unit_by_id(cursor,unit_id)
-    return jsonable_encoder({"data": data})
+    return api_response(200, "Unit fetched", data=jsonable_encoder(data))
 
       
 @router.patch("/{unit_id}/archive")
@@ -51,12 +52,12 @@ async def unarchive_unit_route(unit_id: str, user=Depends(auth_role(["ADMIN","ED
     cursor, connection = db
     return await unarchive_unit(cursor, connection,unit_id,user)
 
-@router.patch("/update/{unit_id}")
+@router.patch("/{unit_id}")
 async def update_unit_route(unit_id: str,payload: UnitCreateRequest,db=Depends(get_db),user=Depends(auth_role(["ADMIN","EDITOR"])),):
     cursor, connection = db
     return await update_unit(cursor, connection, unit_id, payload.model_dump(),user)
 
-@router.delete("/delete/{unit_id}")
+@router.delete("/{unit_id}")
 async def delete_unite_route(unit_id: str, user=Depends(auth_role(["ADMIN"])), db=Depends(get_db),confirm: bool = False):
 
     cursor, connection = db

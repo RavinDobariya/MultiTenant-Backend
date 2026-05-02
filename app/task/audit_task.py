@@ -14,7 +14,7 @@ import time
                   queue="high"                      #if task fail => no ack => task goes back to queue
                   )
 
-def create_audit_log_task(self,action,entity_id,user_id):
+def create_audit_log_task(self, action, entity_id, user_id, is_delete=False):
     logger.info("audit task called || working in background")
     #time.sleep(30)  #=> simulate heavy task
 
@@ -24,7 +24,7 @@ def create_audit_log_task(self,action,entity_id,user_id):
     logic: if key exist in redis => task already executed
     """
 
-    return create_audit_log(action,entity_id,user_id)
+    return create_audit_log(action, entity_id, user_id, is_delete=is_delete)
 
 """
 This Logic will not work as expected

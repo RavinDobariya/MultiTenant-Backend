@@ -54,52 +54,58 @@ def seed_database(db=Depends(get_db)):
 
     # -------------------- Users --------------------
     password_hash = hash_password("Admin@123")
+    admin_id = str(uuid.uuid4())
+    user1_id = str(uuid.uuid4())
+    user2_id = str(uuid.uuid4())
 
     cursor.execute(
         "INSERT INTO user (id, email, password_hash, role, company_id) VALUES (%s, %s, %s, %s, %s)",
-        (str(uuid.uuid4()), "admin@gmail.com", password_hash, "admin", company1_id),
+        (admin_id, "admin@gmail.com", password_hash, "admin", company1_id),
     )
 
     cursor.execute(
         "INSERT INTO user (id, email, password_hash, role, company_id) VALUES (%s, %s, %s, %s, %s)",
-        (str(uuid.uuid4()), "user1@gmail.com", password_hash, "user", company1_id),
+        (user1_id, "user1@gmail.com", password_hash, "user", company1_id),
     )
 
     cursor.execute(
         "INSERT INTO user (id, email, password_hash, role, company_id) VALUES (%s, %s, %s, %s, %s)",
-        (str(uuid.uuid4()), "user2@gmail.com", password_hash, "user", company2_id),
+        (user2_id, "user2@gmail.com", password_hash, "user", company2_id),
     )
 
     # -------------------- Document (1 record) --------------------
+    document_id = str(uuid.uuid4())
     cursor.execute(
         """
         INSERT INTO document (
-            unit_id,
+            id, unit_id,
             title, description, type, status,
-            file_url, approved_by)
-        VALUES (%s, %s, %s, %s, %s, %s, %s)
+            file_url, created_by, approved_by)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
         """,
         (
+            document_id,
             unit1_id,
             "leave policy",
             "basic leave policy document",
             "POLICY",  # enum must match exactly
             "DRAFT",
             "https://example.com/docs/leave-policy.pdf",
+            admin_id,
             None,
         ),
     )
 
     # -------------------- Audit log (1 record) --------------------
     cursor.execute(
-        "INSERT INTO audit_log (id, action) VALUES (%s, %s)",
-        (str(uuid.uuid4()), "DOCUMENT_UPLOAD"),
+        "INSERT INTO audit_log (id, action, entity_id, user_id) VALUES (%s, %s, %s, %s)",
+        (str(uuid.uuid4()), "DOCUMENT_UPLOAD", document_id, admin_id),
     )
 
     # -------------------- Refresh Token (1 record) --------------------
     cursor.execute(
-        "INSERT INTO refresh_token (token, is_revoked) VALUES (%s, 0)",
-        (str(uuid.uuid4()),),
+        "INSERT INTO refresh_token (token, user_id, is_revoked) VALUES (%s, %s, 0)",
+        (str(uuid.uuid4()), admin_id),
     )
 
     connection.commit()
