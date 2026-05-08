@@ -10,10 +10,11 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { login } from "../../api/authApi";
-import { saveTokens } from "../../lib/authStorage";
+import { useAuth } from "../../context/AuthContext";
 
 export default function LoginPage() {
   const navigate = useNavigate();
+  const { login: authLogin } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -31,7 +32,7 @@ export default function LoginPage() {
         throw new Error("Login response did not include tokens");
       }
 
-      saveTokens(response.data);
+      await authLogin(response.data);
       navigate("/app");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");
