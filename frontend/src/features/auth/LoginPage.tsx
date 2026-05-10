@@ -11,18 +11,18 @@ import {
 } from "lucide-react";
 import { login } from "../../api/authApi";
 import { useAuth } from "../../context/AuthContext";
+import { useToast } from "../../context/ToastContext";
 
 export default function LoginPage() {
   const navigate = useNavigate();
   const { login: authLogin } = useAuth();
+  const { pushToast } = useToast();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setError("");
     setIsSubmitting(true);
 
     try {
@@ -33,9 +33,13 @@ export default function LoginPage() {
       }
 
       await authLogin(response.data);
+      pushToast({ message: "Login successful.", tone: "success" });
       navigate("/app");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Login failed");
+      pushToast({
+        message: err instanceof Error ? err.message : "Login failed",
+        tone: "error",
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -109,8 +113,6 @@ export default function LoginPage() {
                 required
               />
             </label>
-
-            {error ? <div className="form-error">{error}</div> : null}
 
             <button className="login-submit" type="submit" disabled={isSubmitting}>
               {isSubmitting ? (

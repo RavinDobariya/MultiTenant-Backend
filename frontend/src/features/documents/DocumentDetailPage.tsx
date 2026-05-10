@@ -14,6 +14,8 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
+import { DetailSkeleton } from "../../components/ui/Skeletons";
+import { useToast } from "../../context/ToastContext";
 import {
   approveDocument,
   archiveDocument,
@@ -34,6 +36,7 @@ function formatDate(value: string | null) {
 export default function DocumentDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
+  const { pushToast } = useToast();
   const role = (user?.role || "user").toUpperCase();
   const [document, setDocument] = useState<Document | null>(null);
   const [units, setUnits] = useState<Unit[]>([]);
@@ -41,7 +44,6 @@ export default function DocumentDetailPage() {
   const [saving, setSaving] = useState(false);
   const [actionLoading, setActionLoading] = useState<"approve" | "archive" | "download" | null>(null);
   const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [type, setType] = useState<Document["type"]>("POLICY");
@@ -71,7 +73,9 @@ export default function DocumentDetailPage() {
         setUnits(unitsRes.data);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load document");
+      const message = err instanceof Error ? err.message : "Failed to load document";
+      setError(message);
+      pushToast({ message, tone: "error" });
     } finally {
       setLoading(false);
     }
@@ -91,8 +95,6 @@ export default function DocumentDetailPage() {
     if (!id || !document) return;
 
     setSaving(true);
-    setError("");
-    setNotice("");
 
     try {
       await updateDocumentMetadata(id, {
@@ -100,10 +102,13 @@ export default function DocumentDetailPage() {
         description: description.trim(),
         type,
       });
-      setNotice("Document metadata updated.");
+      pushToast({ message: "Document metadata updated.", tone: "success" });
       await loadDocument();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to update document");
+      pushToast({
+        message: err instanceof Error ? err.message : "Failed to update document",
+        tone: "error",
+      });
     } finally {
       setSaving(false);
     }
@@ -112,15 +117,16 @@ export default function DocumentDetailPage() {
   async function handleApprove() {
     if (!id) return;
     setActionLoading("approve");
-    setError("");
-    setNotice("");
 
     try {
       await approveDocument(id);
-      setNotice("Document moved to approved state.");
+      pushToast({ message: "Document moved to approved state.", tone: "success" });
       await loadDocument();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to approve document");
+      pushToast({
+        message: err instanceof Error ? err.message : "Failed to approve document",
+        tone: "error",
+      });
     } finally {
       setActionLoading(null);
     }
@@ -129,15 +135,16 @@ export default function DocumentDetailPage() {
   async function handleArchive() {
     if (!id) return;
     setActionLoading("archive");
-    setError("");
-    setNotice("");
 
     try {
       await archiveDocument(id);
-      setNotice("Document archived.");
+      pushToast({ message: "Document archived.", tone: "success" });
       await loadDocument();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to archive document");
+      pushToast({
+        message: err instanceof Error ? err.message : "Failed to archive document",
+        tone: "error",
+      });
     } finally {
       setActionLoading(null);
     }
@@ -146,7 +153,6 @@ export default function DocumentDetailPage() {
   async function handleDownload() {
     if (!id) return;
     setActionLoading("download");
-    setError("");
 
     try {
       const blob = await downloadDocumentFile(id);
@@ -154,19 +160,17 @@ export default function DocumentDetailPage() {
       window.open(url, "_blank", "noopener,noreferrer");
       window.setTimeout(() => window.URL.revokeObjectURL(url), 60_000);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to download file");
+      pushToast({
+        message: err instanceof Error ? err.message : "Failed to download file",
+        tone: "error",
+      });
     } finally {
       setActionLoading(null);
     }
   }
 
   if (loading) {
-    return (
-      <div className="doc-detail-loading">
-        <Loader2 size={28} className="spin" />
-        <p>Loading document...</p>
-      </div>
-    );
+    return <DetailSkeleton />;
   }
 
   if (error && !document) {
@@ -260,7 +264,6 @@ export default function DocumentDetailPage() {
       </div>
 
       {error ? <div className="docs-error">{error}</div> : null}
-      {notice ? <div className="form-success">{notice}</div> : null}
 
       <div className="doc-detail-grid">
         <section className="doc-detail-panel doc-overview-panel">

@@ -11,6 +11,9 @@ import {
   Trash2,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
+import { useConfirm } from "../../context/ConfirmContext";
+import { useToast } from "../../context/ToastContext";
+import { SplitPanelSkeleton, TableSkeleton } from "../../components/ui/Skeletons";
 import {
   archiveUnit,
   createUnit,
@@ -25,6 +28,8 @@ import {
 
 export default function UnitsPage() {
   const { user } = useAuth();
+  const confirm = useConfirm();
+  const { pushToast } = useToast();
   const role = (user?.role || "user").toUpperCase();
   const canManage = role === "ADMIN" || role === "EDITOR";
   const canDelete = role === "ADMIN";
@@ -38,7 +43,6 @@ export default function UnitsPage() {
   const [submitting, setSubmitting] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
 
   const [createName, setCreateName] = useState("");
   const [editName, setEditName] = useState("");
@@ -61,7 +65,9 @@ export default function UnitsPage() {
 
       setSelectedUnitId(nextUnitId);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load units");
+      const message = err instanceof Error ? err.message : "Failed to load units";
+      setError(message);
+      pushToast({ message, tone: "error" });
     } finally {
       setLoading(false);
     }
@@ -87,7 +93,9 @@ export default function UnitsPage() {
         setEditName(unit?.name || "");
       })
       .catch((err) => {
-        setError(err instanceof Error ? err.message : "Failed to load unit details");
+        const message = err instanceof Error ? err.message : "Failed to load unit details";
+        setError(message);
+        pushToast({ message, tone: "error" });
       })
       .finally(() => setDetailLoading(false));
   }, [selectedUnitId]);
@@ -107,17 +115,18 @@ export default function UnitsPage() {
     if (!createName.trim()) return;
 
     setSubmitting(true);
-    setError("");
-    setNotice("");
 
     try {
       const response = await createUnit({ name: createName.trim() });
       const newUnitId = response.data?.unit_id || null;
       setCreateName("");
-      setNotice("Unit created.");
+      pushToast({ message: "Unit created.", tone: "success" });
       await loadUnits(newUnitId);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create unit");
+      pushToast({
+        message: err instanceof Error ? err.message : "Failed to create unit",
+        tone: "error",
+      });
     } finally {
       setSubmitting(false);
     }
@@ -128,15 +137,16 @@ export default function UnitsPage() {
     if (!selectedUnitId || !editName.trim()) return;
 
     setSubmitting(true);
-    setError("");
-    setNotice("");
 
     try {
       await updateUnit(selectedUnitId, { name: editName.trim() });
-      setNotice("Unit updated.");
+      pushToast({ message: "Unit updated.", tone: "success" });
       await loadUnits(selectedUnitId);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to update unit");
+      pushToast({
+        message: err instanceof Error ? err.message : "Failed to update unit",
+        tone: "error",
+      });
     } finally {
       setSubmitting(false);
     }
@@ -146,16 +156,20 @@ export default function UnitsPage() {
     if (!selectedUnitId) return;
 
     setActionLoading("archive");
-    setError("");
-    setNotice("");
 
     try {
       await archiveUnit(selectedUnitId, cascadeArchive);
-      setNotice(cascadeArchive ? "Unit archived with cascade." : "Unit archived.");
+      pushToast({
+        message: cascadeArchive ? "Unit archived with cascade." : "Unit archived.",
+        tone: "success",
+      });
       setCascadeArchive(false);
       await loadUnits(selectedUnitId);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to archive unit");
+      pushToast({
+        message: err instanceof Error ? err.message : "Failed to archive unit",
+        tone: "error",
+      });
     } finally {
       setActionLoading(null);
     }
@@ -165,15 +179,16 @@ export default function UnitsPage() {
     if (!selectedUnitId) return;
 
     setActionLoading("unarchive");
-    setError("");
-    setNotice("");
 
     try {
       await unarchiveUnit(selectedUnitId);
-      setNotice("Unit restored.");
+      pushToast({ message: "Unit restored.", tone: "success" });
       await loadUnits(selectedUnitId);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to unarchive unit");
+      pushToast({
+        message: err instanceof Error ? err.message : "Failed to unarchive unit",
+        tone: "error",
+      });
     } finally {
       setActionLoading(null);
     }
@@ -182,23 +197,27 @@ export default function UnitsPage() {
   async function handleDelete() {
     if (!selectedUnitId) return;
 
-    const confirmed = window.confirm(
-      "Delete this unit permanently? This can remove related data and cannot be undone."
-    );
+    const confirmed = await confirm({
+      title: "Delete unit",
+      description: "Delete this unit permanently? This can remove related data and cannot be undone.",
+      confirmLabel: "Delete unit",
+      tone: "danger",
+    });
     if (!confirmed) return;
 
     setActionLoading("delete");
-    setError("");
-    setNotice("");
 
     try {
       await deleteUnit(selectedUnitId, true);
-      setNotice("Unit deleted.");
+      pushToast({ message: "Unit deleted.", tone: "success" });
       setSelectedUnitId(null);
       setSelectedUnit(null);
       await loadUnits(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to delete unit");
+      pushToast({
+        message: err instanceof Error ? err.message : "Failed to delete unit",
+        tone: "error",
+      });
     } finally {
       setActionLoading(null);
     }
@@ -225,8 +244,10 @@ export default function UnitsPage() {
       </div>
 
       {error ? <div className="docs-error">{error}</div> : null}
-      {notice ? <div className="form-success">{notice}</div> : null}
 
+      {loading ? (
+        <SplitPanelSkeleton />
+      ) : (
       <div className="units-layout">
         <section className="units-panel units-list-panel">
           <div className="units-panel-head">
@@ -234,12 +255,7 @@ export default function UnitsPage() {
             <span>{visibleUnits.length} visible</span>
           </div>
 
-          {loading ? (
-            <div className="units-loading">
-              <Loader2 size={24} className="spin" />
-              <p>Loading units...</p>
-            </div>
-          ) : visibleUnits.length === 0 ? (
+          {visibleUnits.length === 0 ? (
             <div className="units-empty">
               <Archive size={30} />
               <p>No units found for the current filter.</p>
@@ -305,10 +321,7 @@ export default function UnitsPage() {
                 <p>Select a unit to inspect its document grouping.</p>
               </div>
             ) : detailLoading ? (
-              <div className="units-loading">
-                <Loader2 size={24} className="spin" />
-                <p>Loading unit details...</p>
-              </div>
+              <TableSkeleton rows={4} />
             ) : (
               <>
                 <div className="unit-detail-header">
@@ -435,6 +448,7 @@ export default function UnitsPage() {
           </section>
         </div>
       </div>
+      )}
     </div>
   );
 }

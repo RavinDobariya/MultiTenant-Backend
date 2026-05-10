@@ -137,9 +137,45 @@ CREATE TABLE refresh_token (
 );
 
 
+-- -----------------Join Requests Table-------------------
+CREATE TABLE join_request (
+  id CHAR(36) NOT NULL,
+  company_id CHAR(36) NOT NULL,
+  email VARCHAR(255) NOT NULL,
+  password_hash VARCHAR(255) NOT NULL,
+  requested_role ENUM('admin','editor','user') NOT NULL,
+  status ENUM('PENDING','APPROVED','REJECTED') NOT NULL DEFAULT 'PENDING',
+  reviewed_by CHAR(36) NULL,
+  approved_user_id CHAR(36) NULL,
+  rejection_reason VARCHAR(255) NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  reviewed_at TIMESTAMP NULL DEFAULT NULL,
+
+  PRIMARY KEY (id),
+
+  UNIQUE KEY uq_join_request_company_email_status (company_id, email, status),
+  KEY index_join_request_company_id (company_id),
+  KEY index_join_request_status (status),
+  KEY index_join_request_created_at (created_at),
+
+  CONSTRAINT fk_join_request_company
+    FOREIGN KEY (company_id) REFERENCES company(id)
+    ON DELETE CASCADE ON UPDATE CASCADE,
+
+  CONSTRAINT fk_join_request_reviewed_by
+    FOREIGN KEY (reviewed_by) REFERENCES `user`(id)
+    ON DELETE SET NULL ON UPDATE CASCADE,
+
+  CONSTRAINT fk_join_request_approved_user
+    FOREIGN KEY (approved_user_id) REFERENCES `user`(id)
+    ON DELETE SET NULL ON UPDATE CASCADE
+);
+
+
 SELECT * FROM user;
 SELECT * FROM company;
 SELECT * FROM unit;
 SELECT * FROM document;
 SELECT * FROM audit_log;
+SELECT * FROM join_request;
 

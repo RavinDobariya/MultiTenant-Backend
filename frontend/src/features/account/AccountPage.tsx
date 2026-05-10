@@ -10,6 +10,8 @@ import {
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { deleteMyAccount } from "../../api/authApi";
+import { useConfirm } from "../../context/ConfirmContext";
+import { useToast } from "../../context/ToastContext";
 
 function roleBadgeClass(role: string) {
   const normalizedRole = role.toUpperCase();
@@ -20,23 +22,30 @@ function roleBadgeClass(role: string) {
 
 export default function AccountPage() {
   const { user, logout } = useAuth();
+  const confirm = useConfirm();
+  const { pushToast } = useToast();
   const [deleting, setDeleting] = useState(false);
-  const [error, setError] = useState("");
 
   async function handleDeleteAccount() {
-    const confirmed = window.confirm(
-      "Delete your account? This will mark your user record as deleted and end your session."
-    );
+    const confirmed = await confirm({
+      title: "Delete account",
+      description: "Delete your account? This will mark your user record as deleted and end your session.",
+      confirmLabel: "Delete account",
+      tone: "danger",
+    });
     if (!confirmed) return;
 
     setDeleting(true);
-    setError("");
 
     try {
       await deleteMyAccount(true);
+      pushToast({ message: "Account deleted.", tone: "success" });
       await logout();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to delete account");
+      pushToast({
+        message: err instanceof Error ? err.message : "Failed to delete account",
+        tone: "error",
+      });
       setDeleting(false);
     }
   }
@@ -49,9 +58,6 @@ export default function AccountPage() {
           <p>Review your current access profile and session controls.</p>
         </div>
       </div>
-
-      {error ? <div className="docs-error">{error}</div> : null}
-
       <div className="account-grid">
         <section className="company-panel">
           <div className="doc-panel-heading">

@@ -2,13 +2,7 @@
 
 ## Project Context
 
-This repository currently contains a FastAPI backend for a multi-tenant document management system. The backend is mounted under `/api/...` and `app/main.py` is already prepared to serve a React production build from `frontend/dist` when that folder exists.
-
-There is no frontend source directory yet. The intended frontend should be created under:
-
-```txt
-frontend/
-```
+This repository contains a FastAPI backend and an implemented React frontend for a multi-tenant document management system. The backend is mounted under `/api/...` and `app/main.py` is prepared to serve the React production build from `frontend/dist`.
 
 The backend CORS configuration currently allows:
 
@@ -69,7 +63,6 @@ Login returns:
 Important endpoints:
 
 ```txt
-POST   /api/signup
 POST   /api/login
 POST   /api/refresh
 POST   /api/logout
@@ -77,6 +70,22 @@ GET    /api/me
 GET    /api/admin
 DELETE /api/delete?confirm=true
 ```
+
+Public onboarding endpoints currently in active use:
+
+```txt
+POST   /api/signup-company
+GET    /api/companies/discover?query=...
+POST   /api/join-requests
+GET    /api/join-requests              (admin only)
+PATCH  /api/join-requests/{id}/approve (admin only)
+PATCH  /api/join-requests/{id}/reject  (admin only)
+```
+
+Notes:
+
+- `POST /api/signup` is intentionally blocked for direct tenant joining.
+- Existing-company onboarding now requires an admin-approved join request.
 
 Access token expiry is short, so the frontend should implement automatic refresh on `401`.
 
@@ -195,7 +204,7 @@ Live API/database tests were not run because they require the local MySQL/Redis/
 
 ## Frontend Goal
 
-Build a professional, teacher-impressive SaaS-style frontend for the document management system.
+Maintain and polish a professional, teacher-impressive SaaS-style frontend for the document management system.
 
 The application should feel like a real operational dashboard, not a basic CRUD assignment. It should have polished navigation, clear role-aware controls, clean data tables, upload workflows, confirmations, loading states, empty states, and useful dashboard metrics.
 
@@ -344,18 +353,19 @@ Required:
 
 ### Signup
 
-Signup currently requires an existing `company_id`, so make that clear in the form.
-
 Recommended:
 
 - Email
 - Password
-- Role select
-- Company ID
+- Role select for join requests
+- Company search by name for existing-workspace requests
+- Workspace name for first-company onboarding
 
-Alternative later:
+Current behavior:
 
-- Admin-only user creation screen inside the app.
+- `Create workspace` calls `POST /api/signup-company`
+- `Join existing` searches companies and submits `POST /api/join-requests`
+- Users cannot log in until a company admin approves the request
 
 ### App Shell
 
@@ -541,42 +551,37 @@ During development, if frontend and backend run separately:
 VITE_API_BASE_URL=http://localhost:8000/api
 ```
 
-## Implementation Order
+## Implementation Status
 
-1. Create `frontend` with Vite React TypeScript.
-2. Configure Tailwind, router, query client, Axios, and Vite port `3000`.
-3. Build landing page.
-4. Build auth pages and auth context.
-5. Build protected routes and app shell.
-6. Build dashboard.
-7. Build documents list and document actions.
-8. Build document detail.
-9. Build units page.
-10. Build company page.
-11. Build audit logs.
-12. Build account page.
-13. Add final polish:
-    - toasts
-    - skeletons
-    - empty states
-    - confirmation dialogs
-    - responsive mobile layout
-14. Run frontend build.
-15. Verify FastAPI serves `frontend/dist`.
+Completed implementation:
+
+1. Frontend scaffold under `frontend/`
+2. Router, auth context, protected routes, and Vite dev setup on port `3000`
+3. Landing page
+4. Login flow
+5. Workspace creation onboarding
+6. Existing-company join-request onboarding
+7. Protected app shell
+8. Dashboard
+9. Documents list and detail flows
+10. Units page
+11. Company page
+12. Audit logs
+13. Account page
+14. Frontend production build verification
+
+Remaining implementation/polish:
+
+1. Replace native confirm dialogs with in-app confirmation modals
+2. Replace inline success/error banners with toast notifications
+3. Add skeleton loaders where pages still use basic spinners
+4. Final responsive cleanup for dense action rows and tables
+5. End-to-end live integration testing with real local services
+6. Final integrated check that FastAPI serves `frontend/dist` correctly
 
 ## Notes For Next Session
 
-Start by reading this file.
-
-Then inspect current git status because the backend had pre-existing uncommitted changes before frontend work began.
-
-Suggested first command:
-
-```powershell
-git status --short
-```
-
-Then create the frontend app under `frontend/` and keep the backend API base at `/api`.
+Start by reading this file and then inspect `git status --short` before further changes, because the worktree may contain unrelated local edits.
 
 ## Current Frontend Progress
 
@@ -673,8 +678,8 @@ The original onboarding deadlock has been fixed.
 
 Implemented:
 
-- Existing-company signup via `POST /api/signup`
 - New company + first admin onboarding via `POST /api/signup-company`
+- Existing-company onboarding via admin-approved join requests
 - Signup page supports:
   - `Create workspace`
   - `Join existing`
@@ -682,7 +687,14 @@ Implemented:
 Result:
 
 - First-time users can create a company and its first admin directly
-- Existing tenants can still onboard additional users with a company ID
+- Existing tenants can request access by company name search and wait for admin approval
+- Direct existing-company self-signup is intentionally disabled
+
+Current privacy posture:
+
+- Public company search returns company names only
+- Internal company IDs are not exposed through public onboarding search
+- Frontend requires at least 3 characters before company discovery search
 
 ## App Shell and Dashboard Status
 
@@ -743,6 +755,8 @@ Implemented:
 - Current company summary
 - Company users list
 - Company units list
+- Admin join-request review queue
+- Admin approve / reject join requests
 - Admin rename company
 - Admin delete company
 
@@ -773,6 +787,17 @@ Important backend corrections made while implementing frontend:
 
 - Auth routes now preserve useful `HTTPException` messages
 - Public company onboarding route added: `POST /api/signup-company`
+- Direct existing-company signup is blocked in favor of join requests
+- Public company discovery route added: `GET /api/companies/discover`
+- Join-request workflow added:
+  - `POST /api/join-requests`
+  - `GET /api/join-requests`
+  - `PATCH /api/join-requests/{id}/approve`
+  - `PATCH /api/join-requests/{id}/reject`
+- Alembic migration added for `join_request` table:
+  - `d83b0f8f4d2a_add_join_request_table.py`
+- Alembic migration added to expand `user.role` enum for `editor`:
+  - `e4a1c7d9b2f1_expand_user_role_enum_for_editor.py`
 - Document delete confirmation bug fixed
 - Unit list is tenant-scoped
 - Unit detail is tenant-scoped
@@ -795,6 +820,8 @@ Remaining work is now mostly polish / QA:
    - copy tone
    - empty states
    - mutation feedback
+6. Live onboarding QA for join requests and admin approval flow
+7. Final integrated backend/frontend verification against real local services
 
 ## Known Issues / Follow-Up Notes
 
@@ -803,6 +830,8 @@ Still worth reviewing later:
 - Some backend comments or old non-user-facing strings may still contain encoding artifacts
 - Dense action rows on smaller screens should be manually tested
 - The current frontend uses inline success/error feedback instead of a toast system
+- Public company-name discovery is acceptable for the current build, but invite-code onboarding is the next privacy-hardening option if stricter tenant confidentiality is needed
+- Several API routes return `201` for update-style operations where `200` might be more conventional; frontend currently tolerates the live contract, but backend response consistency is still worth normalizing later
 
 ## Verification Completed
 
@@ -818,6 +847,36 @@ Completed backend syntax verification:
 ```powershell
 python -m compileall app
 ```
+
+Partially completed live environment verification on May 10, 2026:
+
+- Confirmed local FastAPI API responds on `http://127.0.0.1:8000/api`
+- Confirmed local frontend responds on `http://localhost:3000`
+- Confirmed required local services were running during the check:
+  - MySQL
+  - Redis
+  - Uvicorn
+- Confirmed and fixed two live schema/runtime issues discovered during real API testing:
+  - missing `join_request` table before running Alembic upgrade
+  - missing `editor` value in live `user.role` enum before running the follow-up Alembic upgrade
+
+Live API paths verified successfully before the test run was intentionally stopped:
+
+- `GET /api`
+- `POST /api/signup-company`
+- `POST /api/signup` correctly blocked for direct tenant joining
+- `POST /api/login`
+- `GET /api/me`
+- `GET /api/companies/discover`
+- `POST /api/join-requests`
+- pending-user login blocked before approval
+- `GET /api/join-requests`
+- `PATCH /api/join-requests/{id}/approve`
+- approved-user login
+- `POST /api/refresh`
+- `GET /api/companies/get-your-company`
+- `PATCH /api/companies/update`
+- unit create/list/detail/update flow reached live API successfully before the broader run was stopped
 
 The frontend dev server is expected to run on:
 
@@ -836,17 +895,25 @@ npm run dev
 
 Current important contract details:
 
-- Existing-company signup endpoint is `POST /api/signup`
-- Existing-company signup payload requires:
-  - `email`
-  - `password`
-  - `role`
-  - `company_id`
 - New onboarding endpoint is `POST /api/signup-company`
 - New onboarding payload requires:
   - `company_name`
   - `email`
   - `password`
+- Existing-company direct signup is disabled
+- Public company search endpoint is `GET /api/companies/discover?query=...`
+  - frontend should require at least 3 characters before search
+  - search results expose company names, not internal company IDs
+- Join-request creation endpoint is `POST /api/join-requests`
+  - payload requires:
+    - `company_name`
+    - `email`
+    - `password`
+    - `requested_role`
+- Join-request admin review endpoints are:
+  - `GET /api/join-requests`
+  - `PATCH /api/join-requests/{id}/approve`
+  - `PATCH /api/join-requests/{id}/reject`
 - Signup password validation currently requires:
   - minimum length `8`
   - maximum length `12`
@@ -863,33 +930,50 @@ Current important contract details:
 
 High-value testing still pending:
 
-1. Manual onboarding test:
+1. Continue the interrupted live API verification pass:
+   - complete unit archive / unarchive / delete checks
+   - complete document create / upload / download / approve / archive / restore / delete checks
+   - complete audit-log endpoint checks
+   - complete logout / delete-account flow checks
+   - complete company cleanup / delete flow check at end of test tenant lifecycle
+
+2. Manual onboarding test:
    - create workspace
    - login as first admin
-   - note created company ID
+   - search company by name from a second browser/session
+   - submit join request
+   - approve request from admin company page
+   - verify login works only after approval
 
-2. Manual role test:
+3. Manual role test:
    - admin
    - editor
    - user
    - verify action visibility and forbidden operations
 
-3. Manual documents flow test:
+4. Manual documents flow test:
    - create document
    - upload file
    - approve
    - archive
    - delete
 
-4. Manual responsive test:
+5. Manual responsive test:
    - documents page
    - units page
    - audits page
    - auth pages
 
-5. Live environment integration test with real MySQL / Redis / Cloudinary setup
+6. Manual privacy check:
+   - public company search only returns names
+   - internal company IDs are not shown during join flow
+   - pending users cannot log in before approval
 
-6. Final check that FastAPI serves `frontend/dist` correctly in integrated mode
+7. Live environment integration test with real MySQL / Redis / Cloudinary setup
+   - include Cloudinary upload/download verification with a real uploaded file
+   - note any response-shape inconsistencies or unexpected status codes during the pass
+
+8. Final check that FastAPI serves `frontend/dist` correctly in integrated mode
 
 ## Later Frontend Slices
 

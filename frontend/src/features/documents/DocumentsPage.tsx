@@ -16,6 +16,9 @@ import {
   Eye,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
+import { TableSkeleton } from "../../components/ui/Skeletons";
+import { useConfirm } from "../../context/ConfirmContext";
+import { useToast } from "../../context/ToastContext";
 import {
   approveDocument,
   archiveDocument,
@@ -35,6 +38,8 @@ const TYPE_OPTIONS = ["", "POLICY", "MANUAL", "REPORT"] as const;
 
 export default function DocumentsPage() {
   const { user } = useAuth();
+  const confirm = useConfirm();
+  const { pushToast } = useToast();
   const role = (user?.role || "user").toUpperCase();
   const canEdit = role === "ADMIN" || role === "EDITOR";
   const isAdmin = role === "ADMIN";
@@ -44,7 +49,6 @@ export default function DocumentsPage() {
   const [totalResults, setTotalResults] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
 
   const [page, setPage] = useState(1);
   const [sortBy, setSortBy] = useState("created_at");
@@ -87,7 +91,9 @@ export default function DocumentsPage() {
         setTotalResults(payload["total results"] || 0);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load documents");
+      const message = err instanceof Error ? err.message : "Failed to load documents";
+      setError(message);
+      pushToast({ message, tone: "error" });
     } finally {
       setLoading(false);
     }
@@ -109,17 +115,6 @@ export default function DocumentsPage() {
       })
       .catch(() => {});
   }, []);
-
-  useEffect(() => {
-    if (!notice && !error) return;
-
-    const timeoutId = window.setTimeout(() => {
-      setNotice("");
-      setError("");
-    }, 3200);
-
-    return () => window.clearTimeout(timeoutId);
-  }, [notice, error]);
 
   function resetFilters() {
     setPage(1);
@@ -144,8 +139,6 @@ export default function DocumentsPage() {
     if (!createUnitId || !createTitle.trim()) return;
 
     setSubmittingCreate(true);
-    setError("");
-    setNotice("");
 
     try {
       await createDocument({
@@ -158,11 +151,14 @@ export default function DocumentsPage() {
       setCreateDescription("");
       setCreateType("POLICY");
       setCreateOpen(false);
-      setNotice("Document created.");
+      pushToast({ message: "Document created.", tone: "success" });
       setPage(1);
       await loadDocuments();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create document");
+      pushToast({
+        message: err instanceof Error ? err.message : "Failed to create document",
+        tone: "error",
+      });
     } finally {
       setSubmittingCreate(false);
     }
@@ -170,14 +166,15 @@ export default function DocumentsPage() {
 
   async function handleApprove(documentId: string) {
     setActionLoading(`approve:${documentId}`);
-    setError("");
-    setNotice("");
     try {
       await approveDocument(documentId);
-      setNotice("Document approved.");
+      pushToast({ message: "Document approved.", tone: "success" });
       await loadDocuments();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to approve document");
+      pushToast({
+        message: err instanceof Error ? err.message : "Failed to approve document",
+        tone: "error",
+      });
     } finally {
       setActionLoading(null);
     }
@@ -185,34 +182,40 @@ export default function DocumentsPage() {
 
   async function handleArchive(documentId: string) {
     setActionLoading(`archive:${documentId}`);
-    setError("");
-    setNotice("");
     try {
       await archiveDocument(documentId);
-      setNotice("Document archived.");
+      pushToast({ message: "Document archived.", tone: "success" });
       await loadDocuments();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to archive document");
+      pushToast({
+        message: err instanceof Error ? err.message : "Failed to archive document",
+        tone: "error",
+      });
     } finally {
       setActionLoading(null);
     }
   }
 
   async function handleDelete(documentId: string) {
-    const confirmed = window.confirm(
-      "Delete this document permanently? This will remove related data and cannot be undone."
-    );
+    const confirmed = await confirm({
+      title: "Delete document",
+      description:
+        "Delete this document permanently? This will remove related data and cannot be undone.",
+      confirmLabel: "Delete document",
+      tone: "danger",
+    });
     if (!confirmed) return;
 
     setActionLoading(`delete:${documentId}`);
-    setError("");
-    setNotice("");
     try {
       await deleteDocument(documentId, true);
-      setNotice("Document deleted.");
+      pushToast({ message: "Document deleted.", tone: "success" });
       await loadDocuments();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to delete document");
+      pushToast({
+        message: err instanceof Error ? err.message : "Failed to delete document",
+        tone: "error",
+      });
     } finally {
       setActionLoading(null);
     }
@@ -220,14 +223,16 @@ export default function DocumentsPage() {
 
   async function handleDownload(documentId: string) {
     setActionLoading(`download:${documentId}`);
-    setError("");
     try {
       const blob = await downloadDocumentFile(documentId);
       const url = window.URL.createObjectURL(blob);
       window.open(url, "_blank", "noopener,noreferrer");
       window.setTimeout(() => window.URL.revokeObjectURL(url), 60_000);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to download document");
+      pushToast({
+        message: err instanceof Error ? err.message : "Failed to download document",
+        tone: "error",
+      });
     } finally {
       setActionLoading(null);
     }
@@ -237,14 +242,15 @@ export default function DocumentsPage() {
     if (!file) return;
 
     setActionLoading(`upload:${documentId}`);
-    setError("");
-    setNotice("");
     try {
       await uploadDocumentFile(documentId, file);
-      setNotice("File uploaded.");
+      pushToast({ message: "File uploaded.", tone: "success" });
       await loadDocuments();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to upload file");
+      pushToast({
+        message: err instanceof Error ? err.message : "Failed to upload file",
+        tone: "error",
+      });
     } finally {
       setActionLoading(null);
       const input = fileInputsRef.current[documentId];
@@ -448,14 +454,10 @@ export default function DocumentsPage() {
       )}
 
       {error && <div className="docs-error">{error}</div>}
-      {notice && <div className="form-success">{notice}</div>}
 
       <div className="docs-table-wrap">
         {loading ? (
-          <div className="docs-loading">
-            <Loader2 size={24} className="spin" />
-            <p>Loading documents...</p>
-          </div>
+          <TableSkeleton rows={8} />
         ) : documents.length === 0 ? (
           <div className="docs-empty">
             <FileText size={40} />

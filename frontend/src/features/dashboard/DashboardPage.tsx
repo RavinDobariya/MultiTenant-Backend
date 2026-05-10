@@ -20,6 +20,8 @@ import { fetchDocuments, type Document } from "../../api/documentApi";
 import { fetchUnits, type Unit } from "../../api/unitApi";
 import { fetchMyCompany, type Company } from "../../api/companyApi";
 import { fetchAuditLogsByRole, type AuditLog } from "../../api/auditApi";
+import { DashboardSkeleton } from "../../components/ui/Skeletons";
+import { useToast } from "../../context/ToastContext";
 
 type DashboardData = {
   company: Company | null;
@@ -31,6 +33,7 @@ type DashboardData = {
 
 export default function DashboardPage() {
   const { user } = useAuth();
+  const { pushToast } = useToast();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -58,7 +61,9 @@ export default function DashboardPage() {
 
         setData({ company, documents, totalDocs, units, audits });
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to load dashboard");
+        const message = err instanceof Error ? err.message : "Failed to load dashboard";
+        setError(message);
+        pushToast({ message, tone: "error" });
       } finally {
         setLoading(false);
       }
@@ -68,12 +73,7 @@ export default function DashboardPage() {
   }, []);
 
   if (loading) {
-    return (
-      <div className="dash-loading">
-        <Loader2 size={28} className="spin" />
-        <p>Loading dashboard...</p>
-      </div>
-    );
+    return <DashboardSkeleton />;
   }
 
   if (error) {

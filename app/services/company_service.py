@@ -5,6 +5,35 @@ from fastapi.encoders import jsonable_encoder
 from app.utils.response_handler import api_response  
 import uuid
 
+
+def _get_company_column_meta(cursor):
+    meta = {}
+    for column_name in ("created_by", "updated_at", "updated_by"):
+        cursor.execute(f"SHOW COLUMNS FROM company LIKE %s", (column_name,))
+        row = cursor.fetchone()
+        if row:
+            meta[column_name] = row
+    return meta
+
+
+def _insert_company_record(cursor, company_id: str, company_name: str, user_id: str):
+    company_columns = _get_company_column_meta(cursor)
+
+    if not company_columns:
+        cursor.execute(
+            "INSERT INTO company (id, name, created_at) VALUES (%s, %s, NOW())",
+            (company_id, company_name),
+        )
+        return
+
+    cursor.execute(
+        """
+        INSERT INTO company (id, name, created_at, created_by, updated_at, updated_by)
+        VALUES (%s, %s, NOW(), %s, NOW(), %s)
+        """,
+        (company_id, company_name, user_id, user_id),
+    )
+
 def create_company(cursor, connection, payload: dict,user):
     """
     Requirement:
@@ -28,7 +57,7 @@ def create_company(cursor, connection, payload: dict,user):
             else:
                 break
             
-        cursor.execute("INSERT INTO company (id,name, created_at, created_by,updated_at,updated_by) VALUES (%s,%s, NOW(),%s,Now(),%s)",[company_id,payload["name"],user["id"],user["id"]])
+        _insert_company_record(cursor, company_id, payload["name"], user["id"])
         connection.commit()
 
         logger.info(f"Company created with name={payload['name']}")

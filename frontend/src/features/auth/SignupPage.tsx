@@ -1,4 +1,4 @@
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   ArrowRight,
@@ -6,10 +6,17 @@ import {
   CheckCircle2,
   FileText,
   Loader2,
+  Search,
   ShieldCheck,
   Users,
 } from "lucide-react";
-import { signup, signupCompany } from "../../api/authApi";
+import { signupCompany } from "../../api/authApi";
+import {
+  createJoinRequest,
+  discoverCompanies,
+  type DiscoveredCompany,
+} from "../../api/companyApi";
+import { useToast } from "../../context/ToastContext";
 
 const ROLE_OPTIONS = [
   {
@@ -33,14 +40,16 @@ type SignupMode = "join" | "create_company";
 
 export default function SignupPage() {
   const navigate = useNavigate();
+  const { pushToast } = useToast();
   const [mode, setMode] = useState<SignupMode>("create_company");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [companyId, setCompanyId] = useState("");
+  const [companySearch, setCompanySearch] = useState("");
   const [companyName, setCompanyName] = useState("");
+  const [companyOptions, setCompanyOptions] = useState<DiscoveredCompany[]>([]);
+  const [selectedCompany, setSelectedCompany] = useState<DiscoveredCompany | null>(null);
+  const [isSearchingCompanies, setIsSearchingCompanies] = useState(false);
   const [role, setRole] = useState<"admin" | "editor" | "user">("user");
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
   const [createdCompanyId, setCreatedCompanyId] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -49,28 +58,57 @@ export default function SignupPage() {
     [role]
   );
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setError("");
-    setSuccess("");
-    setCreatedCompanyId("");
+  useEffect(() => {
+    if (mode !== "join") return;
 
-    const trimmedEmail = email.trim();
-    const trimmedCompanyId = companyId.trim();
-    const trimmedCompanyName = companyName.trim();
-
-    if (password.length < 8 || password.length > 12) {
-      setError("Password must be between 8 and 12 characters.");
+    const trimmedQuery = companySearch.trim();
+    if (!trimmedQuery) {
+      setCompanyOptions([]);
+      setIsSearchingCompanies(false);
       return;
     }
 
-    if (mode === "join" && !trimmedCompanyId) {
-      setError("Company ID is required.");
+    if (trimmedQuery.length < 3) {
+      setCompanyOptions([]);
+      setIsSearchingCompanies(false);
+      return;
+    }
+
+    const timeoutId = window.setTimeout(async () => {
+      setIsSearchingCompanies(true);
+
+      try {
+        const response = await discoverCompanies(trimmedQuery);
+        setCompanyOptions(response.data || []);
+      } catch {
+        setCompanyOptions([]);
+      } finally {
+        setIsSearchingCompanies(false);
+      }
+    }, 250);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [companySearch, mode]);
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setCreatedCompanyId("");
+
+    const trimmedEmail = email.trim();
+    const trimmedCompanyName = companyName.trim();
+
+    if (password.length < 8 || password.length > 12) {
+      pushToast({ message: "Password must be between 8 and 12 characters.", tone: "error" });
+      return;
+    }
+
+    if (mode === "join" && !selectedCompany) {
+      pushToast({ message: "Select a company before sending the join request.", tone: "error" });
       return;
     }
 
     if (mode === "create_company" && !trimmedCompanyName) {
-      setError("Company name is required.");
+      pushToast({ message: "Company name is required.", tone: "error" });
       return;
     }
 
@@ -78,13 +116,16 @@ export default function SignupPage() {
 
     try {
       if (mode === "join") {
-        await signup({
+        await createJoinRequest({
           email: trimmedEmail,
           password,
-          role,
-          company_id: trimmedCompanyId,
+          requested_role: role,
+          company_name: selectedCompany!.name,
         });
-        setSuccess("Account created. Redirecting to login...");
+        pushToast({
+          message: "Join request submitted. A company admin must approve it before you can log in.",
+          tone: "success",
+        });
       } else {
         const response = await signupCompany({
           company_name: trimmedCompanyName,
@@ -93,12 +134,17 @@ export default function SignupPage() {
         });
         const createdId = response.data?.company_id || "";
         setCreatedCompanyId(createdId);
-        setSuccess("Workspace created. You can now log in with the admin account.");
+        pushToast({
+          message: "Workspace created. You can now log in with the admin account.",
+          tone: "success",
+        });
+        window.setTimeout(() => navigate("/login"), 1200);
       }
-
-      window.setTimeout(() => navigate("/login"), 1200);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Signup failed");
+      pushToast({
+        message: err instanceof Error ? err.message : "Signup failed",
+        tone: "error",
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -118,9 +164,8 @@ export default function SignupPage() {
           <p className="eyebrow">Company onboarding</p>
           <h1>Start a new workspace or join an existing tenant.</h1>
           <p>
-            The deadlock is removed now. You can create the first company admin
-            directly from this screen, or join an existing company when you already
-            have its company ID.
+            Create the first admin account for a new workspace, or search for an
+            existing company and send a membership request for admin review.
           </p>
         </div>
 
@@ -148,7 +193,7 @@ export default function SignupPage() {
             <p>
               {mode === "create_company"
                 ? "Create the company workspace and its first admin account."
-                : "Join an existing company workspace with its company ID."}
+                : "Search for the company, request a role, and wait for admin approval."}
             </p>
           </div>
 
@@ -231,19 +276,66 @@ export default function SignupPage() {
                 <p className="form-hint">{selectedRole?.description}</p>
 
                 <label>
-                  <span>Company ID</span>
+                  <span>Company search</span>
+                  <div className="search-input-wrap">
+                    <Search size={16} />
+                    <input
+                      type="text"
+                      value={companySearch}
+                      onChange={(event) => {
+                        setCompanySearch(event.target.value);
+                        setSelectedCompany(null);
+                      }}
+                      placeholder="Search by company name, minimum 3 letters"
+                      autoComplete="off"
+                      required
+                    />
+                  </div>
+
+                  {companySearch.trim().length > 0 && companySearch.trim().length < 3 ? (
+                    <div className="search-results-note">
+                      Enter at least 3 letters to search.
+                    </div>
+                  ) : null}
+
+                  {isSearchingCompanies ? (
+                    <div className="search-results-note">Searching companies...</div>
+                  ) : null}
+
+                  {companyOptions.length ? (
+                    <div className="company-search-results">
+                      {companyOptions.map((company) => (
+                        <button
+                          key={company.name}
+                          type="button"
+                          className={`company-search-result ${
+                            selectedCompany?.name === company.name ? "active" : ""
+                          }`}
+                          onClick={() => {
+                            setSelectedCompany(company);
+                            setCompanySearch(company.name);
+                          }}
+                        >
+                          <strong>{company.name}</strong>
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                </label>
+
+                <label>
+                  <span>Selected company</span>
                   <input
                     type="text"
-                    value={companyId}
-                    onChange={(event) => setCompanyId(event.target.value)}
-                    placeholder="Paste the tenant company ID"
+                    value={selectedCompany?.name || ""}
+                    readOnly
+                    placeholder="Choose a company from search results"
                     autoComplete="off"
-                    required
                   />
                 </label>
 
                 <p className="form-hint">
-                  Use this when an admin has already created the workspace and shared the company ID.
+                  Submit the request to the target company. An admin must approve it before your account becomes active.
                 </p>
               </>
             ) : (
@@ -252,8 +344,6 @@ export default function SignupPage() {
               </p>
             )}
 
-            {error ? <div className="form-error">{error}</div> : null}
-            {success ? <div className="form-success">{success}</div> : null}
             {createdCompanyId ? (
               <div className="form-success">
                 {`Created company ID: ${createdCompanyId}`}

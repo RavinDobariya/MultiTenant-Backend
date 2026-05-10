@@ -22,38 +22,73 @@ def _generate_unique_id(cursor, table_name: str):
         return entity_id
 
 
+def _get_company_column_meta(cursor):
+    meta = {}
+    for column_name in ("created_by", "updated_at", "updated_by"):
+        cursor.execute(f"SHOW COLUMNS FROM company LIKE %s", (column_name,))
+        row = cursor.fetchone()
+        if row:
+            meta[column_name] = row
+    return meta
+
+
+def _insert_company_record(cursor, company_id: str, company_name: str, user_id: str):
+    company_columns = _get_company_column_meta(cursor)
+
+    if not company_columns:
+        cursor.execute(
+            "INSERT INTO company (id, name, created_at) VALUES (%s, %s, NOW())",
+            (company_id, company_name),
+        )
+        return False
+
+    created_by_nullable = company_columns["created_by"]["Null"] == "YES"
+    updated_by_nullable = company_columns["updated_by"]["Null"] == "YES"
+
+    if created_by_nullable and updated_by_nullable:
+        cursor.execute(
+            """
+            INSERT INTO company (id, name, created_at, created_by, updated_at, updated_by)
+            VALUES (%s, %s, NOW(), NULL, NOW(), NULL)
+            """,
+            (company_id, company_name),
+        )
+        return True
+
+    cursor.execute(
+        """
+        INSERT INTO company (id, name, created_at, created_by, updated_at, updated_by)
+        VALUES (%s, %s, NOW(), %s, NOW(), %s)
+        """,
+        (company_id, company_name, user_id, user_id),
+    )
+    return False
+
+
+def _sync_company_audit_fields(cursor, company_id: str, user_id: str):
+    company_columns = _get_company_column_meta(cursor)
+    if not company_columns:
+        return
+
+    cursor.execute(
+        """
+        UPDATE company
+        SET created_by = %s, updated_at = NOW(), updated_by = %s
+        WHERE id = %s
+        """,
+        (user_id, user_id, company_id),
+    )
+
+
 def auth_signup(cursor, conn, payload):
     try:
-        # role validate
-        if payload.role not in ALLOWED_ROLES:
-            logger.warning(f"Signup attempt with invalid role: {payload.role}") 
-            raise HTTPException(400, "Invalid role")
-        
-#0 False [], (),None,{} ,if not user
-
-        # email exists?
-        cursor.execute("SELECT 1 FROM `user` WHERE email=%s", [payload.email])
-        if cursor.fetchone():
-            logger.warning(f"Signup attempt with existing email: {payload.email}")  
-            raise HTTPException(400, "Email already registered")
-
-        # company exists?
-        cursor.execute("SELECT 1 FROM company WHERE id=%s", [payload.company_id])
-        if not cursor.fetchone():
-            logger.warning(f"Signup attempt with non-existing company_id: {payload.company_id}")
-            raise HTTPException(404, "Company not found")
-
-        user_id = _generate_unique_id(cursor, "user")
-        
-        hashed_pass =hash_password(payload.password)    
-        cursor.execute(
-            "INSERT INTO `user` (id, email, password_hash, role, company_id) VALUES (%s,%s,%s,%s,%s)",
-            (user_id, payload.email, hashed_pass, payload.role, payload.company_id)
+        logger.warning(
+            f"Direct signup blocked for email={payload.email}, company_id={payload.company_id}"
         )
-        conn.commit()
-        logger.info(f"User signed up with email: user_id: {user_id},{payload.email}")
-
-        return {"id": user_id, "email": payload.email, "role": payload.role, "company_id": payload.company_id}
+        raise HTTPException(
+            status_code=403,
+            detail="Direct company signup is disabled. Submit a join request and wait for admin approval.",
+        )
     except HTTPException:
         raise
     except Exception as e:
@@ -77,12 +112,8 @@ def auth_signup_company_admin(cursor, conn, payload):
         user_id = _generate_unique_id(cursor, "user")
         hashed_pass = hash_password(payload.password)
 
-        cursor.execute(
-            """
-            INSERT INTO company (id, name, created_at, created_by, updated_at, updated_by)
-            VALUES (%s, %s, NOW(), %s, NOW(), %s)
-            """,
-            (company_id, payload.company_name, user_id, user_id),
+        needs_company_sync = _insert_company_record(
+            cursor, company_id, payload.company_name, user_id
         )
         cursor.execute(
             """
@@ -91,6 +122,8 @@ def auth_signup_company_admin(cursor, conn, payload):
             """,
             (user_id, payload.email, hashed_pass, "admin", company_id),
         )
+        if needs_company_sync:
+            _sync_company_audit_fields(cursor, company_id, user_id)
         conn.commit()
 
         logger.info(

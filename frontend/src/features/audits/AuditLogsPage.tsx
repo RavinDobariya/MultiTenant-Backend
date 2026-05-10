@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import {
   ClipboardList,
   Filter,
-  Loader2,
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
@@ -12,11 +11,14 @@ import {
   fetchMyAuditLogs,
   type AuditLog,
 } from "../../api/auditApi";
+import { TableSkeleton } from "../../components/ui/Skeletons";
+import { useToast } from "../../context/ToastContext";
 
 const PAGE_SIZE = 20;
 
 export default function AuditLogsPage() {
   const { user } = useAuth();
+  const { pushToast } = useToast();
   const role = (user?.role || "user").toUpperCase();
   const isAdmin = role === "ADMIN";
 
@@ -55,7 +57,9 @@ export default function AuditLogsPage() {
           setHasMore(false);
         }
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to load audit logs");
+        const message = err instanceof Error ? err.message : "Failed to load audit logs";
+        setError(message);
+        pushToast({ message, tone: "error" });
       } finally {
         setLoading(false);
       }
@@ -149,10 +153,7 @@ export default function AuditLogsPage() {
         </div>
 
         {loading ? (
-          <div className="units-loading">
-            <Loader2 size={24} className="spin" />
-            <p>Loading audit logs...</p>
-          </div>
+          <TableSkeleton rows={7} />
         ) : audits.length === 0 ? (
           <div className="units-empty">
             <ClipboardList size={30} />

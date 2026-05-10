@@ -42,10 +42,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   async function handleLogin(tokens: TokenResponse) {
-    saveTokens(tokens);
-    const res = await fetchMe();
-    if (res.data) {
-      setUser(res.data);
+    try {
+      saveTokens(tokens);
+      const res = await fetchMe();
+      if (res.data) {
+        setUser(res.data);
+        return;
+      }
+      clearTokens();
+      throw new Error("Login succeeded but user profile could not be loaded");
+    } catch (error) {
+      clearTokens();
+      setUser(null);
+      throw error;
     }
   }
 

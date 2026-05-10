@@ -5,13 +5,6 @@ export type LoginPayload = {
   password: string;
 };
 
-export type SignupPayload = {
-  email: string;
-  password: string;
-  role: "admin" | "editor" | "user";
-  company_id: string;
-};
-
 export type CompanyAdminSignupPayload = {
   company_name: string;
   email: string;
@@ -30,18 +23,6 @@ export type User = {
   role: string;
   company_id: string;
 };
-
-export async function signup(payload: SignupPayload) {
-  return apiRequest<{
-    id: string;
-    email: string;
-    role: string;
-    company_id: string;
-  }>("/signup", {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
-}
 
 export async function signupCompany(payload: CompanyAdminSignupPayload) {
   return apiRequest<{

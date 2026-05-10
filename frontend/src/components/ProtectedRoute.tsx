@@ -1,6 +1,6 @@
 import { Navigate, Outlet } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { Loader2 } from "lucide-react";
+import { SkeletonBlock } from "./ui/Skeletons";
 
 export default function ProtectedRoute() {
   const { user, loading } = useAuth();
@@ -8,8 +8,11 @@ export default function ProtectedRoute() {
   if (loading) {
     return (
       <main className="loading-screen">
-        <Loader2 size={32} className="spin" />
-        <p>Loading workspace...</p>
+        <div className="loading-shell">
+          <SkeletonBlock className="skeleton-title" />
+          <SkeletonBlock className="skeleton-line short" />
+          <SkeletonBlock className="skeleton-card-tall" />
+        </div>
       </main>
     );
   }
