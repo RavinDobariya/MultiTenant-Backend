@@ -1,10 +1,16 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import LoginPage from "../features/auth/LoginPage";
+import SignupPage from "../features/auth/SignupPage";
 import LandingPage from "../features/landing/LandingPage";
 import ProtectedRoute from "../components/ProtectedRoute";
 import AppShell from "../components/layout/AppShell";
 import DashboardPage from "../features/dashboard/DashboardPage";
 import DocumentsPage from "../features/documents/DocumentsPage";
+import DocumentDetailPage from "../features/documents/DocumentDetailPage";
+import UnitsPage from "../features/units/UnitsPage";
+import CompanyPage from "../features/company/CompanyPage";
+import AuditLogsPage from "../features/audits/AuditLogsPage";
+import AccountPage from "../features/account/AccountPage";
 
 function PlaceholderPage({ title }: { title: string }) {
   return (
@@ -20,17 +26,17 @@ export default function App() {
     <Routes>
       <Route path="/" element={<LandingPage />} />
       <Route path="/login" element={<LoginPage />} />
-      <Route path="/signup" element={<PlaceholderPage title="Signup" />} />
+      <Route path="/signup" element={<SignupPage />} />
 
       <Route element={<ProtectedRoute />}>
         <Route element={<AppShell />}>
           <Route path="/app" element={<DashboardPage />} />
           <Route path="/app/documents" element={<DocumentsPage />} />
-          <Route path="/app/documents/:id" element={<PlaceholderPage title="Document Detail" />} />
-          <Route path="/app/units" element={<PlaceholderPage title="Units" />} />
-          <Route path="/app/company" element={<PlaceholderPage title="Company" />} />
-          <Route path="/app/audits" element={<PlaceholderPage title="Audit Logs" />} />
-          <Route path="/app/account" element={<PlaceholderPage title="Account" />} />
+          <Route path="/app/documents/:id" element={<DocumentDetailPage />} />
+          <Route path="/app/units" element={<UnitsPage />} />
+          <Route path="/app/company" element={<CompanyPage />} />
+          <Route path="/app/audits" element={<AuditLogsPage />} />
+          <Route path="/app/account" element={<AccountPage />} />
         </Route>
       </Route>
 

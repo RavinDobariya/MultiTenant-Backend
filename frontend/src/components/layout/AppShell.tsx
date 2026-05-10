@@ -10,7 +10,6 @@ import {
   UserCircle,
   LogOut,
   Menu,
-  X,
   FileStack,
 } from "lucide-react";
 
@@ -24,9 +23,9 @@ const NAV_ITEMS = [
 ];
 
 function roleBadgeClass(role: string) {
-  const r = role.toUpperCase();
-  if (r === "ADMIN") return "role-badge admin";
-  if (r === "EDITOR") return "role-badge editor";
+  const normalizedRole = role.toUpperCase();
+  if (normalizedRole === "ADMIN") return "role-badge admin";
+  if (normalizedRole === "EDITOR") return "role-badge editor";
   return "role-badge user";
 }
 
@@ -42,12 +41,10 @@ export default function AppShell() {
 
   return (
     <div className="app-shell">
-      {/* Mobile overlay */}
       {sidebarOpen && (
         <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />
       )}
 
-      {/* Sidebar */}
       <aside className={`app-sidebar ${sidebarOpen ? "open" : ""}`}>
         <div className="sidebar-brand">
           <Link to="/app" className="brand" onClick={() => setSidebarOpen(false)}>
@@ -93,7 +90,6 @@ export default function AppShell() {
         </div>
       </aside>
 
-      {/* Main content area */}
       <div className="app-main">
         <header className="app-topbar">
           <div className="topbar-left">
@@ -110,10 +106,11 @@ export default function AppShell() {
               </span>
             </div>
           </div>
+
           <div className="topbar-right">
             <span className="topbar-company">
               <Building2 size={14} />
-              Company #{user?.company_id || "—"}
+              {`Company #${user?.company_id || "-"}`}
             </span>
             <div className="topbar-user-chip">
               <span className="sidebar-avatar small">

@@ -23,13 +23,13 @@ async def create_unit_route(payload: UnitCreateRequest, user=Depends(auth_role([
 async def get_units_routes(db=Depends(get_db),user=Depends(auth_role(["ADMIN","EDITOR","USER"]))):
         logger.info("Fetching all units at /units endpoint")
         cursor, connection = db
-        return await get_units(cursor)
+        return await get_units(cursor, user)
         
 
 @router.get("/{unit_id}")
 async def get_unit_by_id_route(unit_id: str,db=Depends(get_db),user=Depends(auth_role(["ADMIN", "EDITOR", "USER"]))):
     cursor,connection = db
-    data = await get_unit_by_id(cursor,unit_id)
+    data = await get_unit_by_id(cursor, unit_id, user)
     return api_response(200, "Unit fetched", data=jsonable_encoder(data))
 
       

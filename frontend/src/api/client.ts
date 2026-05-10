@@ -62,7 +62,7 @@ export async function apiRequest<T>(
     headers,
   });
 
-  // Handle 401 — try refresh once
+  // Handle 401 and try refresh once
   if (response.status === 401) {
     if (!isRefreshing) {
       isRefreshing = true;
@@ -78,7 +78,6 @@ export async function apiRequest<T>(
       throw new Error("Session expired. Please log in again.");
     }
 
-    // Retry with new token
     const newToken = getAccessToken();
     if (newToken) {
       headers["Authorization"] = `Bearer ${newToken}`;

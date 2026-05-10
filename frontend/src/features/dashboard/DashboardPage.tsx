@@ -19,7 +19,7 @@ import { useAuth } from "../../context/AuthContext";
 import { fetchDocuments, type Document } from "../../api/documentApi";
 import { fetchUnits, type Unit } from "../../api/unitApi";
 import { fetchMyCompany, type Company } from "../../api/companyApi";
-import { fetchAuditLogs, type AuditLog } from "../../api/auditApi";
+import { fetchAuditLogsByRole, type AuditLog } from "../../api/auditApi";
 
 type DashboardData = {
   company: Company | null;
@@ -42,7 +42,7 @@ export default function DashboardPage() {
           fetchDocuments({ page: 1, limit: 100 }),
           fetchUnits(),
           fetchMyCompany(),
-          fetchAuditLogs({ page: 1, limit: 5 }),
+          fetchAuditLogsByRole(user?.role || "user", { page: 1, limit: 5 }),
         ]);
 
         const documents =
@@ -54,7 +54,7 @@ export default function DashboardPage() {
         const company =
           companyRes.status === "fulfilled" ? companyRes.value.data || null : null;
         const audits =
-          auditsRes.status === "fulfilled" ? auditsRes.value.data || [] : [];
+          auditsRes.status === "fulfilled" ? (auditsRes.value.data || []).slice(0, 5) : [];
 
         setData({ company, documents, totalDocs, units, audits });
       } catch (err) {
@@ -92,13 +92,12 @@ export default function DashboardPage() {
 
   return (
     <div className="dashboard">
-      {/* Welcome section */}
       <div className="dash-welcome">
         <div>
           <h1>Welcome back, {user?.email?.split("@")[0] || "User"}</h1>
           <p>
             {data?.company
-              ? `${data.company.name} — Company #${user?.company_id}`
+              ? `${data.company.name} - Company #${user?.company_id}`
               : `Company #${user?.company_id}`}
           </p>
         </div>
@@ -114,7 +113,6 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Metric cards */}
       <div className="dash-metrics">
         <div className="dash-metric-card">
           <div className="metric-icon">
@@ -167,9 +165,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Quick actions + Recent activity grid */}
       <div className="dash-grid">
-        {/* Quick Actions */}
         <section className="dash-panel">
           <div className="dash-panel-header">
             <Activity size={18} />
@@ -199,7 +195,6 @@ export default function DashboardPage() {
           </div>
         </section>
 
-        {/* Recent Audits */}
         <section className="dash-panel">
           <div className="dash-panel-header">
             <Clock size={18} />
@@ -226,7 +221,6 @@ export default function DashboardPage() {
         </section>
       </div>
 
-      {/* Documents overview table */}
       <section className="dash-panel">
         <div className="dash-panel-header">
           <FileText size={18} />

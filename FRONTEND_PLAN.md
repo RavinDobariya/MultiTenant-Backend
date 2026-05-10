@@ -580,13 +580,9 @@ Then create the frontend app under `frontend/` and keep the backend API base at 
 
 ## Current Frontend Progress
 
-Frontend work has started under:
+Frontend work is now functionally complete across the planned main routes.
 
-```txt
-frontend/
-```
-
-Installed stack so far:
+Implemented stack in active use:
 
 ```txt
 React
@@ -596,144 +592,238 @@ React Router
 lucide-react
 ```
 
-The frontend has been scaffolded and builds successfully.
-
-Important files created so far:
+Important active frontend files now include:
 
 ```txt
-frontend/package.json
-frontend/package-lock.json
-frontend/vite.config.ts
-frontend/index.html
-frontend/src/main.tsx
 frontend/src/app/App.tsx
-frontend/src/styles/globals.css
+frontend/src/context/AuthContext.tsx
+frontend/src/components/ProtectedRoute.tsx
+frontend/src/components/layout/AppShell.tsx
 frontend/src/features/landing/LandingPage.tsx
 frontend/src/features/auth/LoginPage.tsx
+frontend/src/features/auth/SignupPage.tsx
+frontend/src/features/dashboard/DashboardPage.tsx
+frontend/src/features/documents/DocumentsPage.tsx
+frontend/src/features/documents/DocumentDetailPage.tsx
+frontend/src/features/units/UnitsPage.tsx
+frontend/src/features/company/CompanyPage.tsx
+frontend/src/features/audits/AuditLogsPage.tsx
+frontend/src/features/account/AccountPage.tsx
 frontend/src/api/client.ts
 frontend/src/api/authApi.ts
+frontend/src/api/companyApi.ts
+frontend/src/api/unitApi.ts
+frontend/src/api/documentApi.ts
+frontend/src/api/auditApi.ts
 frontend/src/lib/authStorage.ts
-frontend/src/vite-env.d.ts
-```
-
-`.gitignore` was updated to ignore:
-
-```txt
-frontend/node_modules/
-frontend/dist/
-frontend/*.log
+frontend/src/styles/globals.css
 ```
 
 ## Current Implemented Routes
 
 ```txt
-/        Landing page
-/login   Login page
-/signup  Placeholder page
-/app     Placeholder dashboard page
+/                  Landing page
+/login             Login page
+/signup            Signup / onboarding page
+/app               Protected dashboard page
+/app/documents     Protected documents workflow page
+/app/documents/:id Protected document detail page
+/app/units         Protected units page
+/app/company       Protected company page
+/app/audits        Protected audit logs page
+/app/account       Protected account page
 ```
 
 Unknown routes redirect to `/`.
 
 ## Landing Page Status
 
-The landing page went through several review iterations.
+Implemented and acceptable as the current entry point.
 
-Current approved direction:
+Current direction:
 
-- Dark professional SaaS/product style.
-- Larger header.
-- Full-width hero.
-- Animated dashboard preview.
-- Product story sections.
-- Capability panel.
-- Architecture/value cards.
-- Role-based section.
-- CTA section.
-- Footer.
+- Dark professional SaaS/product style
+- Full-width hero
+- Animated dashboard preview
+- Product sections and footer
+- Login and signup entry points
 
-The user disliked the first light/simple version and asked for:
+## Login Status
 
-- Dark theme.
-- Less empty space.
-- Less childish/basic visual style.
-- More professional tone.
-- Cool but professional animations.
-- Longer landing page with footer.
+Implemented:
 
-The current landing page is acceptable enough to move forward unless the user asks for more changes.
+- Email/password form
+- Loading state
+- Error state
+- Calls `POST /api/login`
+- Saves `access_token` and `refresh_token`
+- Redirects to `/app`
 
-## Login Page Status
+Auth infrastructure also includes:
 
-The `/login` route has been implemented.
+- Bearer token attachment
+- `/api/me` bootstrap
+- Refresh-token retry on `401`
+- Protected routes
+- Logout flow
 
-Features:
+## Signup / Onboarding Status
 
-- Dark split-screen login UI.
-- Product/security story panel.
-- Email/password form.
-- Loading state.
-- Error state.
-- Calls `POST /api/login`.
-- Saves `access_token` and `refresh_token` to localStorage.
-- Redirects to `/app` on success.
+The original onboarding deadlock has been fixed.
 
-Minimal API files implemented:
+Implemented:
 
-```txt
-frontend/src/api/client.ts
-frontend/src/api/authApi.ts
-frontend/src/lib/authStorage.ts
-```
+- Existing-company signup via `POST /api/signup`
+- New company + first admin onboarding via `POST /api/signup-company`
+- Signup page supports:
+  - `Create workspace`
+  - `Join existing`
 
-Current token storage keys:
+Result:
 
-```txt
-access_token
-refresh_token
-```
+- First-time users can create a company and its first admin directly
+- Existing tenants can still onboard additional users with a company ID
 
-Important limitation:
+## App Shell and Dashboard Status
 
-The login API client is intentionally minimal. It does not yet implement:
+Implemented:
 
-- Authorization header injection.
-- `/api/me`.
-- Refresh-token retry on `401`.
-- Full auth context.
-- Protected route guard.
+- Sidebar navigation
+- Topbar with page title
+- User and company indicators
+- Logout action
+- Responsive mobile sidebar
+- Dashboard metrics
+- Recent activity
+- Recent documents
 
-Those should be added in the next app-shell slice.
+## Documents Status
+
+Implemented on `/app/documents`:
+
+- Live document listing
+- Filters for status, type, unit, archived
+- Sort controls
+- Pagination
+- Create document flow
+- Upload file action
+- Download file action
+- Admin approve action
+- Admin archive action
+- Admin delete action
+- Role-aware action visibility
+- Loading / empty / inline feedback states
+
+Implemented on `/app/documents/:id`:
+
+- Document detail fetch
+- Metadata view
+- Draft metadata editing for admin/editor
+- File actions
+- Admin approve / restore
+- Admin archive
+
+## Units Status
+
+Implemented:
+
+- Company-scoped unit list
+- Unit detail
+- Create unit
+- Rename unit
+- Archive with cascade option
+- Unarchive
+- Admin delete
+- Unit-linked document summary
+
+## Company Status
+
+Implemented:
+
+- Current company summary
+- Company users list
+- Company units list
+- Admin rename company
+- Admin delete company
+
+## Audit Logs Status
+
+Implemented:
+
+- Admin audit list
+- Admin filters for action / user_id / entity_id
+- Admin pagination
+- User/editor own-audit view
+- Role-aware dashboard audit fetch
+
+## Account Status
+
+Implemented:
+
+- User email
+- Role badge
+- Company ID
+- User ID
+- Logout
+- Delete account
+
+## Backend Fixes Done During Frontend Work
+
+Important backend corrections made while implementing frontend:
+
+- Auth routes now preserve useful `HTTPException` messages
+- Public company onboarding route added: `POST /api/signup-company`
+- Document delete confirmation bug fixed
+- Unit list is tenant-scoped
+- Unit detail is tenant-scoped
+- Unit detail cache key includes company context
+- Dashboard audit fetch is role-aware through the frontend API layer
+- User audit endpoint now returns empty state instead of `404`
+
+## Remaining Frontend Work
+
+There are no major placeholder pages left.
+
+Remaining work is now mostly polish / QA:
+
+1. Replace native browser confirm dialogs with in-app confirmation modals
+2. Replace inline success banners with toast notifications
+3. Add skeleton loaders where pages still use basic spinners
+4. Final responsive cleanup for dense table/action layouts
+5. Cross-page UX consistency pass:
+   - spacing
+   - copy tone
+   - empty states
+   - mutation feedback
+
+## Known Issues / Follow-Up Notes
+
+Still worth reviewing later:
+
+- Some backend comments or old non-user-facing strings may still contain encoding artifacts
+- Dense action rows on smaller screens should be manually tested
+- The current frontend uses inline success/error feedback instead of a toast system
 
 ## Verification Completed
 
-The frontend dependency install completed successfully:
+Completed during implementation:
 
 ```powershell
 cd frontend
-npm install
-```
-
-Production build has passed multiple times:
-
-```powershell
 npm run build
 ```
 
-The dev server has run on:
+Completed backend syntax verification:
+
+```powershell
+python -m compileall app
+```
+
+The frontend dev server is expected to run on:
 
 ```txt
 http://localhost:3000
 ```
-
-Verified routes:
-
-```txt
-http://localhost:3000
-http://localhost:3000/login
-```
-
-Both returned HTTP `200` during the session.
 
 If the dev server is not running in the next session, start it with:
 
@@ -742,64 +832,71 @@ cd frontend
 npm run dev
 ```
 
-## Next Session Priority
+## Current Backend Contract Notes For Frontend
 
-The user asked to continue one slice at a time. Do not build the full app all at once.
+Current important contract details:
 
-Next recommended slice:
+- Existing-company signup endpoint is `POST /api/signup`
+- Existing-company signup payload requires:
+  - `email`
+  - `password`
+  - `role`
+  - `company_id`
+- New onboarding endpoint is `POST /api/signup-company`
+- New onboarding payload requires:
+  - `company_name`
+  - `email`
+  - `password`
+- Signup password validation currently requires:
+  - minimum length `8`
+  - maximum length `12`
+- Audit routes are role-sensitive:
+  - `GET /api/audit-logs/list` is admin-only
+  - `GET /api/audit-logs/user-audits` is for non-admin users
+- Company detail is normalized in frontend API layer because backend returns:
+  - `company id`
+  - `company name`
+  - `company users`
+  - `company units`
 
-```txt
-Protected app shell + dashboard overview at /app
-```
+## Testing Still Needed
 
-Scope for next slice:
+High-value testing still pending:
 
-1. Add auth storage helpers:
-   - get access token
-   - get refresh token
-   - check if authenticated
-2. Extend API client:
-   - attach `Authorization: Bearer <access_token>`
-   - support authenticated requests
-3. Add `/api/me` API function.
-4. Build a simple auth bootstrap:
-   - if token exists, fetch `/me`
-   - if `/me` fails, clear tokens and send user to `/login`
-5. Replace `/app` placeholder with app shell:
-   - left sidebar
-   - topbar
-   - user/role/company display
-   - logout button
-6. Build dashboard overview only:
-   - company/user summary
-   - document status cards using placeholder data initially, or live document list if backend is running
-   - quick action cards for documents, units, audits
-   - no full document CRUD yet
+1. Manual onboarding test:
+   - create workspace
+   - login as first admin
+   - note created company ID
 
-Suggested app routes for that slice:
+2. Manual role test:
+   - admin
+   - editor
+   - user
+   - verify action visibility and forbidden operations
 
-```txt
-/app              Dashboard overview
-/app/documents    Placeholder
-/app/units        Placeholder
-/app/company      Placeholder
-/app/audits       Placeholder
-/app/account      Placeholder
-```
+3. Manual documents flow test:
+   - create document
+   - upload file
+   - approve
+   - archive
+   - delete
 
-Important design instruction:
+4. Manual responsive test:
+   - documents page
+   - units page
+   - audits page
+   - auth pages
 
-Keep the dark professional style established by the landing/login pages. The user is sensitive to layouts that look too simple, childish, centered, or empty. Use dense but clean SaaS dashboard composition.
+5. Live environment integration test with real MySQL / Redis / Cloudinary setup
+
+6. Final check that FastAPI serves `frontend/dist` correctly in integrated mode
 
 ## Later Frontend Slices
 
-After app shell review:
+After QA:
 
-1. Documents list page with filters/table/pagination.
-2. Document create/upload flow.
-3. Document detail page.
-4. Units page.
-5. Company page.
-6. Audit logs page.
-7. Signup page or admin user creation flow.
-8. Full token refresh interceptor and auth hardening if not completed earlier.
+1. Toast notifications
+2. Confirmation modals
+3. Skeleton loaders
+4. Final responsive polish
+5. Final integrated backend/frontend verification

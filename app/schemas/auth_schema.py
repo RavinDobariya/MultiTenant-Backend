@@ -5,6 +5,11 @@ class SignupRequest(BaseModel):
     password: str = Field(min_length=8, max_length=12)
     role: str = "user"
     company_id: str
+
+class CompanyAdminSignupRequest(BaseModel):
+    company_name: str = Field(min_length=2, max_length=100)
+    email: EmailStr
+    password: str = Field(min_length=8, max_length=12)
     
 
 class LoginRequest(BaseModel):

@@ -49,10 +49,10 @@ async def create_unit(cursor, connection, payload: dict,user):
         log_exception(e,f"Error creating unit for company_id: {user['company_id']}")
         raise HTTPException(500, "Failed to create unit")
     
-async def get_units(cursor):
+async def get_units(cursor, user):
     try:
         # create cache key
-        cache_key = create_cache_key("units","list")
+        cache_key = create_cache_key("units", f"list:{user['company_id']}")
 
         #check cache
         cached_data = await cache_get(cache_key)
@@ -60,7 +60,10 @@ async def get_units(cursor):
         if cached_data:
             return api_response(status_code=200,message="Units fetched",data=cached_data)
 
-        cursor.execute("SELECT * FROM unit")         #fetch all units
+        cursor.execute(
+            "SELECT * FROM unit WHERE company_id=%s ORDER BY is_archived ASC, name ASC",
+            (user["company_id"],),
+        )
         units = cursor.fetchall()
         result = jsonable_encoder(units)
 
@@ -75,39 +78,51 @@ async def get_units(cursor):
         raise HTTPException(500, "Internal server error")
 
 
-async def get_unit_by_id(cursor,unit_id:str):
+async def get_unit_by_id(cursor, unit_id: str, user):
     try:
 
         # create cache key
-        cache_key = create_cache_key("unit", unit_id)
+        cache_key = create_cache_key("unit", f"{user['company_id']}:{unit_id}")
 
         cached_data = await cache_get(cache_key)
         if cached_data:
             return cached_data
 
         # Get unit
-        cursor.execute("SELECT id, name, is_archived FROM unit WHERE id = %s",(unit_id,))
+        cursor.execute(
+            "SELECT id, name, is_archived FROM unit WHERE id = %s AND company_id = %s",
+            (unit_id, user["company_id"]),
+        )
         unit = cursor.fetchone()
 
         if not unit:
             raise HTTPException(status_code=404, detail="Unit not found")
 
         # Get docs
-        cursor.execute("SELECT id, title,type FROM document WHERE unit_id = %s",(unit_id,))
+        cursor.execute(
+            """
+            SELECT d.id, d.title, d.type
+            FROM document d
+            JOIN unit u ON u.id = d.unit_id
+            WHERE d.unit_id = %s AND u.company_id = %s
+            """,
+            (unit_id, user["company_id"]),
+        )
         docs = cursor.fetchall()
 
-        await cache_set(cache_key,unit)
-        return {
-        "id": unit["id"],
-        "name": unit["name"],
-        "Documents": docs
+        result = {
+            "id": unit["id"],
+            "name": unit["name"],
+            "Documents": docs,
         }
+        await cache_set(cache_key, result)
+        return result
         
     except HTTPException:
         raise
     except Exception as e:
         log_exception(e,f"failed to fetch Unit | {unit_id}")
-        raise HTTPException(status_code=500, detail="Failed to fetch Unit: | {unit_id}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch Unit: {unit_id}")
 
 
 async def archive_unit(cursor,connection,unit_id,user,cascade):

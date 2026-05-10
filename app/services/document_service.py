@@ -442,29 +442,14 @@ async def upload_document(document_id,file: UploadFile,cursor,connection,user):
 
 async def delete_document(cursor, connection, user: dict, document_id: str,confirm: bool = False):
     try:
-
-        await cache_delete_pattern("key_document*")
-
         if not confirm:
-            cursor.execute("update document set is_delete=1 where id=%s",(document_id,))
-            if cursor.rowcount == 0:
-                raise HTTPException(status_code=404, detail="Document not found")
-
-            cursor.execute("update audit_log set is_delete=1 where entity_id=%s",(document_id,))
-
-            connection.commit()
-            create_audit_log(
-                action="DOCUMENT_AUDIT_SOFT_DELETED",
-                entity_id=document_id,
-                user_id=user["id"],
-                is_delete=True,
-            )
-            return api_response(200, "Document and related audits soft deleted ", document_id)
-            """return api_response(
+            return api_response(
                 200,
                 "Deleting this document will remove all related data. Please confirm.",
                 {"confirm_required": True}
-            )"""
+            )
+
+        await cache_delete_pattern("key_document*")
         cursor.execute("DELETE FROM document WHERE id=%s ",(document_id,))
         if cursor.rowcount == 0:
             raise HTTPException(status_code=404, detail="DOCUMENT_PERMANENTLY_DELETED")

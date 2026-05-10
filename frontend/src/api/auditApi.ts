@@ -4,11 +4,17 @@ export type AuditLog = {
   id: string;
   action: string;
   entity_id: string;
-  user_id: string;
+  user_id?: string;
   created_at: string;
 };
 
-export async function fetchAuditLogs(params?: {
+type UserAuditResponse = {
+  id: string;
+  email: string;
+  Audit_logs: AuditLog[];
+};
+
+export async function fetchAdminAuditLogs(params?: {
   page?: number;
   limit?: number;
   action?: string;
@@ -24,4 +30,29 @@ export async function fetchAuditLogs(params?: {
 
   const qs = query.toString();
   return apiRequest<AuditLog[]>(`/audit-logs/list${qs ? `?${qs}` : ""}`);
+}
+
+export async function fetchMyAuditLogs() {
+  const response = await apiRequest<UserAuditResponse>("/audit-logs/user-audits");
+  return {
+    ...response,
+    data: response.data?.Audit_logs || [],
+  };
+}
+
+export async function fetchAuditLogsByRole(
+  role: string,
+  params?: {
+    page?: number;
+    limit?: number;
+    action?: string;
+    user_id?: string;
+    entity_id?: string;
+  }
+) {
+  if (role.toUpperCase() === "ADMIN") {
+    return fetchAdminAuditLogs(params);
+  }
+
+  return fetchMyAuditLogs();
 }

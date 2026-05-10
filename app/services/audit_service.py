@@ -112,9 +112,6 @@ def get_user_audit_log(cursor,user):
         cursor.execute("SELECT id, action, entity_id, created_at FROM audit_log WHERE user_id = %s ORDER BY created_at DESC",(user_id,))
         audit_log = cursor.fetchall()
 
-        if not audit_log:
-            raise HTTPException(status_code=404, detail="no audits founds")
-
         return {
         "id": user_id,
         "email": user["email"],

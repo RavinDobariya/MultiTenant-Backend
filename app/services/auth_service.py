@@ -11,6 +11,17 @@ import uuid
 ALLOWED_ROLES = {"admin", "user","editor"}
 
 
+def _generate_unique_id(cursor, table_name: str):
+    while True:
+        entity_id = str(uuid.uuid4())
+        cursor.execute(f"SELECT 1 FROM {table_name} WHERE id = %s LIMIT 1", (entity_id,))
+        exists = cursor.fetchone()
+        if exists:
+            logger.info(f"uuid generating again because duplicate found in {table_name}")
+            continue
+        return entity_id
+
+
 def auth_signup(cursor, conn, payload):
     try:
         # role validate
@@ -32,16 +43,7 @@ def auth_signup(cursor, conn, payload):
             logger.warning(f"Signup attempt with non-existing company_id: {payload.company_id}")
             raise HTTPException(404, "Company not found")
 
-        while True:
-            user_id = str(uuid.uuid4()) # ex: U1A2B
-
-            cursor.execute("SELECT 1 FROM user WHERE id = %s LIMIT 1",(user_id,))
-
-            exists = cursor.fetchone()
-            if exists:
-                logger.info("uuid generating again Bcuz duplicate found!!")
-            else:
-                break
+        user_id = _generate_unique_id(cursor, "user")
         
         hashed_pass =hash_password(payload.password)    
         cursor.execute(
@@ -57,6 +59,58 @@ def auth_signup(cursor, conn, payload):
     except Exception as e:
         log_exception(e,f"Error during signup for email: {payload.email}")
         raise HTTPException(500, "Signup failed")
+
+
+def auth_signup_company_admin(cursor, conn, payload):
+    try:
+        cursor.execute("SELECT 1 FROM `user` WHERE email=%s", [payload.email])
+        if cursor.fetchone():
+            logger.warning(f"Company onboarding attempt with existing email: {payload.email}")
+            raise HTTPException(400, "Email already registered")
+
+        cursor.execute("SELECT 1 FROM company WHERE name=%s", [payload.company_name])
+        if cursor.fetchone():
+            logger.warning(f"Company onboarding attempt with existing company name: {payload.company_name}")
+            raise HTTPException(400, "Company name already exists")
+
+        company_id = _generate_unique_id(cursor, "company")
+        user_id = _generate_unique_id(cursor, "user")
+        hashed_pass = hash_password(payload.password)
+
+        cursor.execute(
+            """
+            INSERT INTO company (id, name, created_at, created_by, updated_at, updated_by)
+            VALUES (%s, %s, NOW(), %s, NOW(), %s)
+            """,
+            (company_id, payload.company_name, user_id, user_id),
+        )
+        cursor.execute(
+            """
+            INSERT INTO `user` (id, email, password_hash, role, company_id)
+            VALUES (%s, %s, %s, %s, %s)
+            """,
+            (user_id, payload.email, hashed_pass, "admin", company_id),
+        )
+        conn.commit()
+
+        logger.info(
+            f"Company onboarding complete for company_id={company_id}, admin_email={payload.email}"
+        )
+
+        return {
+            "company_id": company_id,
+            "company_name": payload.company_name,
+            "admin_user_id": user_id,
+            "email": payload.email,
+            "role": "admin",
+        }
+    except HTTPException:
+        conn.rollback()
+        raise
+    except Exception as e:
+        conn.rollback()
+        log_exception(e, f"Error during company onboarding for email: {payload.email}")
+        raise HTTPException(500, "Company onboarding failed")
 
 
 def auth_login(cursor, conn, payload):
