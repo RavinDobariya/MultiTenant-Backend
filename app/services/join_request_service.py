@@ -10,6 +10,17 @@ ALLOWED_ROLES = {"admin", "editor", "user"}
 JOIN_REQUEST_STATUSES = {"PENDING", "APPROVED", "REJECTED"}
 
 
+def _best_effort_audit(action: str, request_id: str, user_id: str):
+    try:
+        create_audit_log(
+            action=action,
+            entity_id=request_id,
+            user_id=user_id,
+        )
+    except Exception as e:
+        log_exception(e, f"Audit log side-effect failed action={action} request_id={request_id}")
+
+
 def _generate_unique_id(cursor, table_name: str):
     while True:
         entity_id = str(uuid.uuid4())
@@ -204,11 +215,7 @@ def approve_join_request(cursor, connection, request_id: str, user, payload):
         )
         connection.commit()
 
-        create_audit_log(
-            action="JOIN_REQUEST_APPROVED",
-            entity_id=request_id,
-            user_id=user["id"],
-        )
+        _best_effort_audit("JOIN_REQUEST_APPROVED", request_id, user["id"])
 
         logger.info(f"Join request approved id={request_id} approved_user_id={user_id}")
         return {
@@ -250,11 +257,7 @@ def reject_join_request(cursor, connection, request_id: str, user, payload):
         )
         connection.commit()
 
-        create_audit_log(
-            action="JOIN_REQUEST_REJECTED",
-            entity_id=request_id,
-            user_id=user["id"],
-        )
+        _best_effort_audit("JOIN_REQUEST_REJECTED", request_id, user["id"])
 
         logger.info(f"Join request rejected id={request_id}")
         return {

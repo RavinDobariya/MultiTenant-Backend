@@ -148,10 +148,39 @@ def auth_signup_company_admin(cursor, conn, payload):
 
 def auth_login(cursor, conn, payload):
     try:
-        cursor.execute( "SELECT id, email, password_hash, role, company_id FROM `user` WHERE email=%s",[payload.email])
+        cursor.execute(
+            "SELECT id, email, password_hash, role, company_id FROM `user` WHERE email=%s AND is_delete=0",
+            [payload.email],
+        )
         user = cursor.fetchone()
 
         if not user:
+            cursor.execute(
+                """
+                SELECT status
+                FROM join_request
+                WHERE email=%s
+                ORDER BY created_at DESC
+                LIMIT 1
+                """,
+                [payload.email],
+            )
+            join_request = cursor.fetchone()
+
+            if join_request and join_request["status"] == "PENDING":
+                logger.warning(f"Login attempt before join request approval: {payload.email}")
+                raise HTTPException(
+                    status_code=403,
+                    detail="Your join request is still pending admin approval.",
+                )
+
+            if join_request and join_request["status"] == "REJECTED":
+                logger.warning(f"Login attempt for rejected join request: {payload.email}")
+                raise HTTPException(
+                    status_code=403,
+                    detail="Your join request was rejected. Submit a new request or contact an admin.",
+                )
+
             logger.warning(f"Login attempt with invalid email: {payload.email}")
             raise HTTPException(status_code=404, detail="Invalid email")
 
@@ -255,6 +284,7 @@ def delete_user(cursor, connection,user,confirm: bool ):
                 {"confirm_required": True}
             )
         cursor.execute("UPDATE `user` SET is_delete = 1  WHERE id=%s ",(user["id"],))
+        cursor.execute("UPDATE refresh_token SET is_revoked=1 WHERE user_id=%s", (user["id"],))
         connection.commit()
 
         return { "message": f"User deleted successfully {user['id']}"}

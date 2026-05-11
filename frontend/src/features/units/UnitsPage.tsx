@@ -243,10 +243,24 @@ export default function UnitsPage() {
         </label>
       </div>
 
-      {error ? <div className="docs-error">{error}</div> : null}
+      {error && visibleUnits.length > 0 ? (
+        <div className="page-inline-feedback">
+          <span>{error}</span>
+          <button className="pagination-btn" onClick={() => void loadUnits(selectedUnitId)}>
+            Retry
+          </button>
+        </div>
+      ) : null}
 
       {loading ? (
         <SplitPanelSkeleton />
+      ) : error && visibleUnits.length === 0 ? (
+        <div className="page-state-panel">
+          <p>{error}</p>
+          <button className="pagination-btn" onClick={() => void loadUnits(selectedUnitId)}>
+            Retry
+          </button>
+        </div>
       ) : (
       <div className="units-layout">
         <section className="units-panel units-list-panel">

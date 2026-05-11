@@ -1,5 +1,4 @@
-import { apiRequest } from "./client";
-import { getAccessToken } from "../lib/authStorage";
+import { apiBlobRequest, apiRequest } from "./client";
 
 export type Document = {
   id: string;
@@ -97,42 +96,19 @@ export async function archiveDocument(documentId: string) {
 }
 
 export async function downloadDocumentFile(documentId: string) {
-  const token = getAccessToken();
-  const baseUrl = import.meta.env.VITE_API_BASE_URL || "/api";
-
-  const response = await fetch(
-    `${baseUrl}/documents/download?document_id=${encodeURIComponent(documentId)}&downloadType=PDF`,
-    {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    }
+  return apiBlobRequest(
+    `/documents/download?document_id=${encodeURIComponent(documentId)}&downloadType=PDF`
   );
-
-  if (!response.ok) {
-    throw new Error("Failed to download file");
-  }
-
-  return response.blob();
 }
 
 export async function uploadDocumentFile(documentId: string, file: File) {
-  const token = getAccessToken();
-  const baseUrl = import.meta.env.VITE_API_BASE_URL || "/api";
   const formData = new FormData();
   formData.append("file", file);
 
-  const response = await fetch(`${baseUrl}/documents/upload/${documentId}`, {
+  return apiRequest<null>(`/documents/upload/${documentId}`, {
     method: "POST",
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
     body: formData,
   });
-
-  const payload = await response.json().catch(() => null);
-  if (!response.ok) {
-    const message = payload?.detail || payload?.message || "Failed to upload file";
-    throw new Error(message);
-  }
-
-  return payload;
 }
 
 export async function deleteDocument(documentId: string, confirm = true) {

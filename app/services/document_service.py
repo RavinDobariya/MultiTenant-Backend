@@ -276,6 +276,9 @@ async def update_document(cursor, connection, payload: dict, user: dict, documen
             )
             return api_response(201, "Document updated",document_id)
 
+        if action in {"ARCHIVE", "RESTORE"} and user["role"].upper() != "ADMIN":
+            raise HTTPException(status_code=403, detail="permissions denied")
+
         if action=="ARCHIVE":
             return await archive_document(cursor,connection,user,document_id)
         if action=="RESTORE":

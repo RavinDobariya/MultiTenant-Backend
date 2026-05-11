@@ -12,6 +12,7 @@ def register_exception_handlers(app):
             401: "UNAUTHORIZED",
             403: "FORBIDDEN",
             404: "RESOURCE_NOT_FOUND",
+            503: "SERVICE_UNAVAILABLE",
             422: "VALIDATION_ERROR",
             409: "INVALID_STATE_TRANSITION",
         }

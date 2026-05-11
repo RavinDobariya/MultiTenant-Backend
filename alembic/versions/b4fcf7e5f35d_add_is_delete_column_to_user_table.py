@@ -18,6 +18,12 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
+    # Drop the old FK before changing the referenced column type/nullability.
+    op.drop_constraint(
+        "fk_user_company",
+        "user",
+        type_="foreignkey"
+    )
 
     # 1. Change company_id to CHAR(36) and make it nullable
     op.alter_column(
@@ -37,13 +43,6 @@ def upgrade() -> None:
             server_default=sa.text("0"),
             nullable=False
         )
-    )
-
-    # 3. Drop old foreign key (if exists)
-    op.drop_constraint(
-        "fk_user_company",
-        "user",
-        type_="foreignkey"
     )
 
     # 4. Create new foreign key

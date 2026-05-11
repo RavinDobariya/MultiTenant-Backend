@@ -4,14 +4,27 @@ from app.utils.config import settings
 import uuid
 import requests
 
-cloudinary.config(
-    cloud_name=settings.CLOUDINARY_CLOUD_NAME,
-    api_key=settings.CLOUDINARY_API_KEY,
-    api_secret=settings.CLOUDINARY_API_SECRET,
-    secure=True
-)
+def _cloudinary_is_configured() -> bool:
+    return all(
+        [
+            settings.CLOUDINARY_CLOUD_NAME,
+            settings.CLOUDINARY_API_KEY,
+            settings.CLOUDINARY_API_SECRET,
+        ]
+    )
+
+
+if _cloudinary_is_configured():
+    cloudinary.config(
+        cloud_name=settings.CLOUDINARY_CLOUD_NAME,
+        api_key=settings.CLOUDINARY_API_KEY,
+        api_secret=settings.CLOUDINARY_API_SECRET,
+        secure=True
+    )
 
 def upload_file_to_cloudinary(file_bytes: bytes, filename: str,content_type):
+    if not _cloudinary_is_configured():
+        raise RuntimeError("Cloudinary is not configured. Set CLOUDINARY_* variables before uploading files.")
 
     # create unique public_id (avoid overwrite)
     name = filename.rsplit(".", 1)[0]           #right side split start....only 1 time

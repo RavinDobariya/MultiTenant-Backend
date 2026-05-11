@@ -171,8 +171,11 @@ export default function CompanyPage() {
 
   if (error && !company) {
     return (
-      <div className="doc-detail-error">
+      <div className="page-state-panel">
         <p>{error}</p>
+        <button className="pagination-btn" onClick={() => void loadCompany()}>
+          Retry
+        </button>
       </div>
     );
   }
@@ -193,7 +196,14 @@ export default function CompanyPage() {
         </span>
       </div>
 
-      {error ? <div className="docs-error">{error}</div> : null}
+      {error && company ? (
+        <div className="page-inline-feedback">
+          <span>{error}</span>
+          <button className="pagination-btn" onClick={() => void loadCompany()}>
+            Retry
+          </button>
+        </div>
+      ) : null}
 
       <div className="company-metrics">
         <div className="dash-metric-card">

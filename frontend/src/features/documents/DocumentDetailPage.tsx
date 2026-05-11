@@ -175,8 +175,11 @@ export default function DocumentDetailPage() {
 
   if (error && !document) {
     return (
-      <div className="doc-detail-error">
+      <div className="page-state-panel">
         <p>{error}</p>
+        <button className="pagination-btn" onClick={() => void loadDocument()}>
+          Retry
+        </button>
       </div>
     );
   }

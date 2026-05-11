@@ -11,11 +11,33 @@ export type ApiResponse<T> = {
 let isRefreshing = false;
 let refreshPromise: Promise<void> | null = null;
 
+function redirectToLogin() {
+  window.location.href = "/login";
+}
+
+function shouldSetJsonContentType(body: BodyInit | null | undefined) {
+  return body !== undefined && body !== null && !(body instanceof FormData);
+}
+
+function buildHeaders(options: RequestInit, token?: string): Headers {
+  const headers = new Headers(options.headers);
+
+  if (!headers.has("Content-Type") && shouldSetJsonContentType(options.body)) {
+    headers.set("Content-Type", "application/json");
+  }
+
+  if (token) {
+    headers.set("Authorization", `Bearer ${token}`);
+  }
+
+  return headers;
+}
+
 async function refreshAccessToken(): Promise<void> {
   const refreshToken = getRefreshToken();
   if (!refreshToken) {
     clearTokens();
-    window.location.href = "/login";
+    redirectToLogin();
     throw new Error("No refresh token");
   }
 
@@ -27,7 +49,7 @@ async function refreshAccessToken(): Promise<void> {
 
   if (!response.ok) {
     clearTokens();
-    window.location.href = "/login";
+    redirectToLogin();
     throw new Error("Refresh failed");
   }
 
@@ -37,32 +59,18 @@ async function refreshAccessToken(): Promise<void> {
     saveTokens(tokens);
   } else {
     clearTokens();
-    window.location.href = "/login";
+    redirectToLogin();
     throw new Error("Invalid refresh response");
   }
 }
 
-export async function apiRequest<T>(
-  path: string,
-  options: RequestInit = {}
-): Promise<ApiResponse<T>> {
+async function executeRequest(path: string, options: RequestInit = {}): Promise<Response> {
   const token = getAccessToken();
-
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    ...(options.headers as Record<string, string> || {}),
-  };
-
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
-  }
-
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+  let response = await fetch(`${API_BASE_URL}${path}`, {
     ...options,
-    headers,
+    headers: buildHeaders(options, token || undefined),
   });
 
-  // Handle 401 and try refresh once
   if (response.status === 401) {
     if (!isRefreshing) {
       isRefreshing = true;
@@ -79,31 +87,90 @@ export async function apiRequest<T>(
     }
 
     const newToken = getAccessToken();
-    if (newToken) {
-      headers["Authorization"] = `Bearer ${newToken}`;
-    }
-
-    const retryResponse = await fetch(`${API_BASE_URL}${path}`, {
+    response = await fetch(`${API_BASE_URL}${path}`, {
       ...options,
-      headers,
+      headers: buildHeaders(options, newToken || undefined),
     });
-
-    const retryPayload = await retryResponse.json().catch(() => null);
-
-    if (!retryResponse.ok) {
-      const message = retryPayload?.detail || retryPayload?.message || "Request failed";
-      throw new Error(message);
-    }
-
-    return retryPayload;
   }
 
-  const payload = await response.json().catch(() => null);
+  return response;
+}
+
+async function parseResponsePayload(response: Response) {
+  if (response.status === 204 || response.status === 205) {
+    return null;
+  }
+
+  const contentType = response.headers.get("content-type") || "";
+
+  if (contentType.includes("application/json")) {
+    return response.json().catch(() => null);
+  }
+
+  if (contentType.startsWith("text/")) {
+    return response.text().catch(() => null);
+  }
+
+  return null;
+}
+
+function normalizeResponse<T>(payload: unknown, response: Response): ApiResponse<T> {
+  if (
+    payload &&
+    typeof payload === "object" &&
+    ("data" in payload || "message" in payload || "error" in payload)
+  ) {
+    return payload as ApiResponse<T>;
+  }
+
+  return {
+    message: response.ok ? response.statusText || "Success" : undefined,
+    data: payload as T,
+    error: null,
+  };
+}
+
+function getErrorMessage(payload: unknown) {
+  if (payload && typeof payload === "object") {
+    if ("detail" in payload && typeof payload.detail === "string") {
+      return payload.detail;
+    }
+    if ("message" in payload && typeof payload.message === "string") {
+      return payload.message;
+    }
+    if ("error" in payload && typeof payload.error === "string") {
+      return payload.error;
+    }
+  }
+
+  if (typeof payload === "string" && payload.trim()) {
+    return payload;
+  }
+
+  return "Request failed";
+}
+
+export async function apiRequest<T>(
+  path: string,
+  options: RequestInit = {}
+): Promise<ApiResponse<T>> {
+  const response = await executeRequest(path, options);
+  const payload = await parseResponsePayload(response);
 
   if (!response.ok) {
-    const message = payload?.detail || payload?.message || "Request failed";
-    throw new Error(message);
+    throw new Error(getErrorMessage(payload));
   }
 
-  return payload;
+  return normalizeResponse<T>(payload, response);
+}
+
+export async function apiBlobRequest(path: string, options: RequestInit = {}): Promise<Blob> {
+  const response = await executeRequest(path, options);
+
+  if (!response.ok) {
+    const payload = await parseResponsePayload(response);
+    throw new Error(getErrorMessage(payload));
+  }
+
+  return response.blob();
 }

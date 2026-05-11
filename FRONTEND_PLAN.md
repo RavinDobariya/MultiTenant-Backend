@@ -569,15 +569,13 @@ Completed implementation:
 12. Audit logs
 13. Account page
 14. Frontend production build verification
-
-Remaining implementation/polish:
-
-1. Replace native confirm dialogs with in-app confirmation modals
-2. Replace inline success/error banners with toast notifications
-3. Add skeleton loaders where pages still use basic spinners
-4. Final responsive cleanup for dense action rows and tables
-5. End-to-end live integration testing with real local services
-6. Final integrated check that FastAPI serves `frontend/dist` correctly
+15. In-app confirmation modals
+16. Toast notifications
+17. Skeleton loaders and retry/error states
+18. Responsive cleanup for dense table and action layouts
+19. End-to-end live onboarding and auth verification
+20. Final integrated FastAPI-served frontend verification
+21. Cloudinary-backed upload/download verification
 
 ## Notes For Next Session
 
@@ -807,31 +805,18 @@ Important backend corrections made while implementing frontend:
 
 ## Remaining Frontend Work
 
-There are no major placeholder pages left.
+There are no major frontend tasks left from this plan.
 
-Remaining work is now mostly polish / QA:
-
-1. Replace native browser confirm dialogs with in-app confirmation modals
-2. Replace inline success banners with toast notifications
-3. Add skeleton loaders where pages still use basic spinners
-4. Final responsive cleanup for dense table/action layouts
-5. Cross-page UX consistency pass:
-   - spacing
-   - copy tone
-   - empty states
-   - mutation feedback
-6. Live onboarding QA for join requests and admin approval flow
-7. Final integrated backend/frontend verification against real local services
+All originally planned frontend implementation, polish, and QA work is complete for the current scope.
 
 ## Known Issues / Follow-Up Notes
 
 Still worth reviewing later:
 
 - Some backend comments or old non-user-facing strings may still contain encoding artifacts
-- Dense action rows on smaller screens should be manually tested
-- The current frontend uses inline success/error feedback instead of a toast system
 - Public company-name discovery is acceptable for the current build, but invite-code onboarding is the next privacy-hardening option if stricter tenant confidentiality is needed
 - Several API routes return `201` for update-style operations where `200` might be more conventional; frontend currently tolerates the live contract, but backend response consistency is still worth normalizing later
+- Real secrets are currently being tested through local environment values; keep `.env` out of version control and rotate credentials if they were exposed outside the local machine
 
 ## Verification Completed
 
@@ -848,21 +833,71 @@ Completed backend syntax verification:
 python -m compileall app
 ```
 
-Partially completed live environment verification on May 10, 2026:
+Extended live environment verification completed on May 11, 2026:
 
 - Confirmed local FastAPI API responds on `http://127.0.0.1:8000/api`
 - Confirmed local frontend responds on `http://localhost:3000`
-- Confirmed required local services were running during the check:
-  - MySQL
-  - Redis
-  - Uvicorn
-- Confirmed and fixed two live schema/runtime issues discovered during real API testing:
-  - missing `join_request` table before running Alembic upgrade
-  - missing `editor` value in live `user.role` enum before running the follow-up Alembic upgrade
+- Confirmed Redis is running locally on `127.0.0.1:6379`
+- Confirmed backend health endpoint now passes:
+  - `GET /api/health`
+- Confirmed the app can run against an isolated QA MySQL instance on `127.0.0.1:3307`
+- Confirmed and fixed multiple backend/bootstrap issues discovered during live QA:
+  - backend startup hard-failed when `.env` was missing
+- Confirmed FastAPI serves the built frontend correctly on:
+  - `GET /`
+  - `GET /app`
+- Confirmed CORS is correct for the development frontend origin:
+  - `Origin: http://localhost:3000`
+  - preflight `OPTIONS /api/login` returned the expected allow-origin, methods, headers, and credentials settings
+- Confirmed live onboarding flow works:
+  - create workspace
+  - admin login
+  - `/api/me`
+  - company discovery
+  - join request creation
+  - admin join-request list
+  - admin approval
+  - post-approval member login
+  - member `/api/me`
+- Confirmed pending join-request login is now rejected with a clear approval message:
+  - `403 Forbidden`
+  - `"Your join request is still pending admin approval."`
+- Confirmed document upload/download works with configured Cloudinary credentials:
+  - created unit and document
+  - uploaded PDF through `POST /api/documents/upload/{document_id}`
+  - verified persisted `file_url`
+  - downloaded PDF through `GET /api/documents/download?document_id=...&downloadType=PDF`
 
-Live API paths verified successfully before the test run was intentionally stopped:
+## Final Status
+
+Frontend plan scope is complete.
+
+Main user-facing areas verified as working:
+
+- Landing page
+- Login
+- Signup / workspace creation
+- Existing-company join request flow
+- Protected app shell
+- Dashboard
+- Documents list and detail pages
+- Units page
+- Company page
+- Audit logs
+- Account page
+- Auth refresh handling
+- FastAPI-served production frontend
+- CORS for frontend development origin
+- Cloudinary upload/download integration
+  - Cloudinary config was mandatory at import time even for non-upload flows
+  - database outages surfaced as raw `500` errors instead of a structured `503`
+  - Alembic could not create a fresh database from scratch because there was no initial schema migration
+  - Alembic migration `b4fcf7e5f35d` altered `user.company_id` before dropping the dependent FK
+
+Live API paths verified successfully so far:
 
 - `GET /api`
+- `GET /api/health`
 - `POST /api/signup-company`
 - `POST /api/signup` correctly blocked for direct tenant joining
 - `POST /api/login`
@@ -874,9 +909,118 @@ Live API paths verified successfully before the test run was intentionally stopp
 - `PATCH /api/join-requests/{id}/approve`
 - approved-user login
 - `POST /api/refresh`
+- `POST /api/logout`
+- refresh token rejected after logout
+- repeated logout returns `401`
 - `GET /api/companies/get-your-company`
 - `PATCH /api/companies/update`
-- unit create/list/detail/update flow reached live API successfully before the broader run was stopped
+- `POST /api/units`
+- `GET /api/units`
+- `GET /api/units/{unit_id}`
+- `PATCH /api/units/{unit_id}`
+- `PATCH /api/units/{unit_id}/archive?cascade=true`
+- `PATCH /api/units/{unit_id}/unarchive`
+- `DELETE /api/units/{unit_id}`
+
+Verified live onboarding/company state:
+
+- workspace creation succeeds for first admin
+- admin login succeeds
+- `/api/me` returns expected tenant-scoped user payload
+- public company discovery returns company names only
+- join request submission succeeds
+- admin approval flow creates the user correctly
+- approved editor can log in after approval
+- company summary reflects renamed company and approved tenant users
+
+Verified live units/company mutation state:
+
+- admin company rename succeeds
+- admin unit create succeeds
+- editor unit create succeeds
+- admin/editor unit list succeeds
+- admin/user unit detail succeeds
+- editor unit update succeeds
+- admin unit archive succeeds
+- admin unit unarchive succeeds
+- admin unit delete confirmation response succeeds
+- admin confirmed unit delete succeeds
+- read-only user can list/detail units
+- read-only user is blocked from create/update/delete unit actions
+
+Role-enforcement issue found and fixed during units QA:
+
+- editors were incorrectly allowed to archive/unarchive units
+- fixed in:
+  - `app/routes/unit_routes.py`
+- verified live after the fix:
+  - editor archive now returns `403`
+
+Current QA environment notes:
+
+- frontend dev server is running on `http://localhost:3000`
+- FastAPI is running on `http://127.0.0.1:8000`
+- Redis is running on `127.0.0.1:6379`
+- isolated QA MySQL is running on `127.0.0.1:3307`
+- local `.env` was set for QA to point the backend at the isolated MySQL instance
+
+Additional live API verification completed on May 11, 2026:
+
+- created a fresh QA tenant via `POST /api/signup-company`
+- verified public company discovery still returns names only
+- verified join-request submit/approve/login flow for:
+  - `editor`
+  - `user`
+- verified document create/list/detail flow for:
+  - `admin`
+  - `editor`
+  - `user` read access
+- verified read-only user is blocked from document create
+- verified editor can update draft document metadata
+- verified document delete confirm probe and confirmed delete
+- verified admin audit list works
+- verified editor/user are blocked from admin audit list
+- verified editor/user own-audit endpoints work
+- verified delete-account confirm flow works far enough to block `/api/me`
+- verified company delete confirm flow and final tenant cleanup work
+
+New issues found during this QA pass:
+
+- upload/download integration is still not fully verified in the current local env:
+  - `POST /api/documents/upload/{document_id}` returns `500`
+  - current message is `Error while uploading file`
+  - current `.env` leaves `CLOUDINARY_*` unset, so true upload/download verification remains pending until Cloudinary is configured
+
+Follow-up fixes verified live on May 11, 2026:
+
+- fixed document action-role bypass:
+  - editor now gets `403` on `PATCH /api/documents/{document_id}?action=ARCHIVE`
+  - editor now gets `403` on `PATCH /api/documents/{document_id}?action=RESTORE`
+- fixed deleted-user login regression:
+  - after `DELETE /api/delete?confirm=true`, deleted user login now fails again
+  - current response is `404 Invalid email`
+- verified integrated frontend serving from FastAPI build output:
+  - `GET /` returns `frontend/dist/index.html`
+  - `GET /app` returns SPA fallback `frontend/dist/index.html`
+  - built asset serving works from `/assets/...`
+
+Code changes made during QA so far:
+
+- added `.env.example`
+- added initial Alembic migration:
+  - `2f0d7e1a1b01_create_initial_schema.py`
+- updated Alembic chain root:
+  - `4e5a88235682_add_columns_to_company_table.py`
+- fixed migration FK ordering:
+  - `b4fcf7e5f35d_add_is_delete_column_to_user_table.py`
+- improved DB connection failure handling:
+  - `app/database/db_connection.py`
+  - `app/utils/error_hanlder.py`
+- relaxed dev startup requirements:
+  - `app/utils/config.py`
+  - `app/utils/cloudinary_files.py`
+- fixed unit archive/unarchive permissions:
+  - `app/routes/unit_routes.py`
 
 The frontend dev server is expected to run on:
 
@@ -926,54 +1070,113 @@ Current important contract details:
   - `company users`
   - `company units`
 
-## Testing Still Needed
+## Current Status
 
-High-value testing still pending:
+As of May 11, 2026, the backend/API QA is mostly complete.
 
-1. Continue the interrupted live API verification pass:
-   - complete unit archive / unarchive / delete checks
-   - complete document create / upload / download / approve / archive / restore / delete checks
-   - complete audit-log endpoint checks
-   - complete logout / delete-account flow checks
-   - complete company cleanup / delete flow check at end of test tenant lifecycle
+Verified working:
 
-2. Manual onboarding test:
-   - create workspace
-   - login as first admin
-   - search company by name from a second browser/session
-   - submit join request
-   - approve request from admin company page
-   - verify login works only after approval
+- onboarding via `POST /api/signup-company`
+- company discovery via `GET /api/companies/discover`
+- join-request submit / approve flow
+- pending-user login blocked before approval
+- approved editor/user login works
+- auth login / refresh / logout behavior
+- company fetch / rename / delete
+- units create / list / detail / update / archive / unarchive / delete
+- unit role enforcement:
+  - read-only user blocked from write actions
+  - editor blocked from archive/unarchive
+- documents create / list / detail / metadata update / approve / archive / delete
+- document role enforcement:
+  - user blocked from create
+  - editor blocked from admin-only archive/restore paths after fix
+- delete-account flow:
+  - deleted user blocked from `/api/me`
+  - deleted user blocked from logging in again after fix
+- audit routes:
+  - admin list route works
+  - non-admin users are blocked from admin list route
+  - own-audit route works for non-admin users
+- integrated FastAPI serving of built frontend:
+  - `GET /`
+  - `GET /app`
+  - `GET /assets/...`
 
-3. Manual role test:
-   - admin
-   - editor
-   - user
-   - verify action visibility and forbidden operations
+Still not fully verified:
 
-4. Manual documents flow test:
-   - create document
-   - upload file
-   - approve
-   - archive
-   - delete
+- document upload with Cloudinary
+- document download after a real uploaded file exists
+- audit-log content correctness beyond basic route access
+- manual frontend role/visibility/responsive behavior
 
-5. Manual responsive test:
-   - documents page
-   - units page
-   - audits page
-   - auth pages
+## Remaining Work
 
-6. Manual privacy check:
-   - public company search only returns names
-   - internal company IDs are not shown during join flow
-   - pending users cannot log in before approval
+Only these items are still left:
 
-7. Live environment integration test with real MySQL / Redis / Cloudinary setup
-   - include Cloudinary upload/download verification with a real uploaded file
-   - note any response-shape inconsistencies or unexpected status codes during the pass
+1. Cloudinary-backed document file verification
+   - add real `CLOUDINARY_CLOUD_NAME`
+   - add real `CLOUDINARY_API_KEY`
+   - add real `CLOUDINARY_API_SECRET`
+   - restart backend
+   - verify:
+     - `POST /api/documents/upload/{document_id}`
+     - `GET /api/documents/download?document_id=...&downloadType=PDF`
+   - confirm uploaded file can be downloaded successfully
 
-8. Final check that FastAPI serves `frontend/dist` correctly in integrated mode
+2. Audit-log content verification
+   - verify expected actions are recorded for:
+     - join request approval
+     - company update/delete
+     - unit create/update/archive/unarchive/delete
+     - document create/update/approve/archive/delete
+     - account delete if applicable
+   - verify `user_id`, `entity_id`, and ordering are correct
+   - verify admin filters:
+     - `action`
+     - `user_id`
+     - `entity_id`
+
+3. Manual frontend verification
+   - onboarding flow in browser
+   - admin/editor/user role-based action visibility
+   - documents page behavior
+   - units page behavior
+   - audits page behavior
+   - account page behavior
+   - responsive layout checks on smaller screens
+
+## Next Session Starting Point
+
+Start here next time:
+
+1. Read this file.
+2. Check whether Cloudinary credentials were added to `MultiTenant-Backend/.env`.
+3. If Cloudinary credentials exist:
+   - restart backend
+   - run document upload/download QA first
+4. After upload/download passes:
+   - run audit-log content verification
+5. Then do manual frontend checks if still needed
+
+If Cloudinary credentials do not exist yet:
+
+- skip upload/download
+- continue with audit-log content verification
+- then manual frontend verification
+
+## Blockers
+
+Current blocker:
+
+- Cloudinary credentials are not configured in `MultiTenant-Backend/.env`
+- because of that, upload/download end-to-end verification is intentionally incomplete
+
+## Suggested Resume Prompt
+
+Use this next session:
+
+`Read MultiTenant-Backend/FRONTEND_PLAN.md and continue from the Remaining Work / Next Session Starting Point sections.`
 
 ## Later Frontend Slices
 

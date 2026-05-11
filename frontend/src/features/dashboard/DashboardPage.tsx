@@ -40,6 +40,9 @@ export default function DashboardPage() {
 
   useEffect(() => {
     async function load() {
+      setLoading(true);
+      setError("");
+
       try {
         const [docsRes, unitsRes, companyRes, auditsRes] = await Promise.allSettled([
           fetchDocuments({ page: 1, limit: 100 }),
@@ -59,6 +62,24 @@ export default function DashboardPage() {
         const audits =
           auditsRes.status === "fulfilled" ? (auditsRes.value.data || []).slice(0, 5) : [];
 
+        const failedSections = [
+          docsRes.status === "rejected" ? "documents" : null,
+          unitsRes.status === "rejected" ? "units" : null,
+          companyRes.status === "rejected" ? "company" : null,
+          auditsRes.status === "rejected" ? "audit activity" : null,
+        ].filter(Boolean);
+
+        if (failedSections.length === 4) {
+          throw new Error("Failed to load dashboard data.");
+        }
+
+        if (failedSections.length > 0) {
+          pushToast({
+            message: `Some dashboard sections could not be loaded: ${failedSections.join(", ")}.`,
+            tone: "error",
+          });
+        }
+
         setData({ company, documents, totalDocs, units, audits });
       } catch (err) {
         const message = err instanceof Error ? err.message : "Failed to load dashboard";
@@ -70,7 +91,7 @@ export default function DashboardPage() {
     }
 
     load();
-  }, []);
+  }, [pushToast, user?.role]);
 
   if (loading) {
     return <DashboardSkeleton />;
@@ -79,7 +100,12 @@ export default function DashboardPage() {
   if (error) {
     return (
       <div className="dash-error">
-        <p>{error}</p>
+        <div className="page-state-panel">
+          <p>{error}</p>
+          <button className="pagination-btn" onClick={() => window.location.reload()}>
+            Retry
+          </button>
+        </div>
       </div>
     );
   }

@@ -1,5 +1,6 @@
 import mysql.connector
 from mysql.connector import Error
+from fastapi import HTTPException
 from app.utils.config import settings
 
 
@@ -14,5 +15,7 @@ def get_connection():
         )
         return connection
     except Error as e:
-        # You can log this later using logger
-        raise Exception(f"Database connection error: {e}")
+        raise HTTPException(
+            status_code=503,
+            detail=f"Database connection error: {e}",
+        ) from e

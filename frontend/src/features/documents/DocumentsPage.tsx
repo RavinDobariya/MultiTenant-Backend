@@ -453,10 +453,24 @@ export default function DocumentsPage() {
         </div>
       )}
 
-      {error && <div className="docs-error">{error}</div>}
+      {error && documents.length > 0 ? (
+        <div className="page-inline-feedback">
+          <span>{error}</span>
+          <button className="pagination-btn" onClick={() => void loadDocuments()}>
+            Retry
+          </button>
+        </div>
+      ) : null}
 
       <div className="docs-table-wrap">
-        {loading ? (
+        {!loading && error && documents.length === 0 ? (
+          <div className="page-state-panel">
+            <p>{error}</p>
+            <button className="pagination-btn" onClick={() => void loadDocuments()}>
+              Retry
+            </button>
+          </div>
+        ) : loading ? (
           <TableSkeleton rows={8} />
         ) : documents.length === 0 ? (
           <div className="docs-empty">
@@ -533,6 +547,7 @@ export default function DocumentsPage() {
                     </span>
                     <div className="docs-row-actions">
                       <Link to={`/app/documents/${doc.id}`} className="docs-icon-btn" title="View">
+                        <span className="sr-only">View document</span>
                         <Eye size={14} />
                       </Link>
 
@@ -540,6 +555,7 @@ export default function DocumentsPage() {
                         <button
                           className="docs-icon-btn"
                           title="Download"
+                          aria-label={`Download ${doc.title}`}
                           onClick={() => handleDownload(doc.id)}
                           disabled={downloadLoading}
                         >
@@ -567,6 +583,7 @@ export default function DocumentsPage() {
                           <button
                             className="docs-icon-btn"
                             title="Upload file"
+                            aria-label={`Upload file for ${doc.title}`}
                             onClick={() => fileInputsRef.current[doc.id]?.click()}
                             disabled={uploadLoading}
                           >
@@ -583,6 +600,11 @@ export default function DocumentsPage() {
                         <button
                           className="docs-icon-btn"
                           title={doc.status === "ARCHIVED" ? "Restore / approve" : "Approve"}
+                          aria-label={
+                            doc.status === "ARCHIVED"
+                              ? `Restore or approve ${doc.title}`
+                              : `Approve ${doc.title}`
+                          }
                           onClick={() => handleApprove(doc.id)}
                           disabled={approveLoading}
                         >
@@ -598,6 +620,7 @@ export default function DocumentsPage() {
                         <button
                           className="docs-icon-btn danger"
                           title="Archive"
+                          aria-label={`Archive ${doc.title}`}
                           onClick={() => handleArchive(doc.id)}
                           disabled={archiveLoading}
                         >
@@ -613,6 +636,7 @@ export default function DocumentsPage() {
                         <button
                           className="docs-icon-btn danger"
                           title="Delete"
+                          aria-label={`Delete ${doc.title}`}
                           onClick={() => handleDelete(doc.id)}
                           disabled={deleteLoading}
                         >

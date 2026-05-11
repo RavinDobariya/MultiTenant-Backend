@@ -27,6 +27,7 @@ export default function AuditLogsPage() {
   const [error, setError] = useState("");
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
+  const [reloadToken, setReloadToken] = useState(0);
 
   const [actionFilter, setActionFilter] = useState("");
   const [userIdFilter, setUserIdFilter] = useState("");
@@ -66,7 +67,7 @@ export default function AuditLogsPage() {
     }
 
     loadAudits();
-  }, [isAdmin, page, actionFilter, userIdFilter, entityIdFilter]);
+  }, [isAdmin, page, actionFilter, userIdFilter, entityIdFilter, reloadToken, pushToast]);
 
   function resetFilters() {
     setPage(1);
@@ -144,7 +145,14 @@ export default function AuditLogsPage() {
         </section>
       ) : null}
 
-      {error ? <div className="docs-error">{error}</div> : null}
+      {error && audits.length > 0 ? (
+        <div className="page-inline-feedback">
+          <span>{error}</span>
+          <button className="pagination-btn" onClick={() => setReloadToken((current) => current + 1)}>
+            Retry
+          </button>
+        </div>
+      ) : null}
 
       <section className="audits-panel">
         <div className="units-panel-head compact">
@@ -152,7 +160,14 @@ export default function AuditLogsPage() {
           <span>{loading ? "Loading" : `${audits.length} rows`}</span>
         </div>
 
-        {loading ? (
+        {!loading && error && audits.length === 0 ? (
+          <div className="page-state-panel compact">
+            <p>{error}</p>
+            <button className="pagination-btn" onClick={() => setReloadToken((current) => current + 1)}>
+              Retry
+            </button>
+          </div>
+        ) : loading ? (
           <TableSkeleton rows={7} />
         ) : audits.length === 0 ? (
           <div className="units-empty">

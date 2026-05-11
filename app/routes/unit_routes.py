@@ -34,7 +34,7 @@ async def get_unit_by_id_route(unit_id: str,db=Depends(get_db),user=Depends(auth
 
       
 @router.patch("/{unit_id}/archive")
-async def archive_unit_route(unit_id: str,cascade:bool=False, user=Depends(auth_role(["ADMIN","EDITOR"])), db=Depends(get_db)):
+async def archive_unit_route(unit_id: str,cascade:bool=False, user=Depends(auth_role(["ADMIN"])), db=Depends(get_db)):
     """
     Requirement:
     - On Cascade all child docs should also be archived
@@ -47,7 +47,7 @@ async def archive_unit_route(unit_id: str,cascade:bool=False, user=Depends(auth_
 
 
 @router.patch("/{unit_id}/unarchive")
-async def unarchive_unit_route(unit_id: str, user=Depends(auth_role(["ADMIN","EDITOR"])), db=Depends(get_db)):
+async def unarchive_unit_route(unit_id: str, user=Depends(auth_role(["ADMIN"])), db=Depends(get_db)):
     logger.info(f"Attempting to unarchive unit_id: {unit_id} for company_id: {user['company_id']}")
     cursor, connection = db
     return await unarchive_unit(cursor, connection,unit_id,user)
